@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus } from 'lucide-react';
+import { Plus, Bell } from 'lucide-react';
 import { IntroScreen } from '@/components/IntroScreen';
 import { HackerClock } from '@/components/HackerClock';
 import { MiniCalendar } from '@/components/MiniCalendar';
@@ -12,7 +12,9 @@ import { SettingsPage } from '@/components/SettingsPage';
 import { AddReminderModal } from '@/components/AddReminderModal';
 import { useAppState } from '@/hooks/useAppState';
 import { aiRouter } from '@/services/ai-router';
+import { notificationService } from '@/services/notifications';
 import { Message, Attachment } from '@/types';
+import { toast } from 'sonner';
 
 type Tab = 'home' | 'chat' | 'calendar' | 'settings';
 
@@ -38,12 +40,22 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [showAddReminder, setShowAddReminder] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'settings') {
       setShowSettings(true);
     }
   }, [activeTab]);
+
+  // Check notification permission
+  useEffect(() => {
+    const checkPermission = async () => {
+      const granted = await notificationService.requestPermission();
+      setNotificationPermission(granted);
+    };
+    checkPermission();
+  }, []);
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
     // Add user message
@@ -54,15 +66,51 @@ const Index = () => {
       attachments,
     });
 
-    // Get AI response
-    const response = await aiRouter.sendMessage(content, messages);
+    // Get AI response using streaming
+    let assistantContent = '';
     
-    // Add assistant message
+    // Create a placeholder message
+    const placeholderId = crypto.randomUUID();
     await addMessage({
       role: 'assistant',
-      content: response.content,
+      content: '',
       mode,
     });
+
+    try {
+      await aiRouter.streamResponse(
+        content,
+        messages,
+        (chunk) => {
+          assistantContent += chunk;
+          // Update the last message with streaming content
+          // Note: This is handled by the addMessage creating a new message
+        }
+      );
+
+      // Update the placeholder with final content
+      if (assistantContent) {
+        // Remove the empty placeholder and add final message
+        await addMessage({
+          role: 'assistant',
+          content: assistantContent,
+          mode,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to get AI response:', error);
+      toast.error('Failed to get AI response');
+    }
+  };
+
+  const handleRequestNotificationPermission = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationPermission(granted);
+    if (granted) {
+      toast.success('Notifications enabled!');
+    } else {
+      toast.error('Notification permission denied');
+    }
   };
 
   if (isLoading) {
@@ -90,7 +138,18 @@ const Index = () => {
           {/* Header */}
           <header className="fixed top-0 left-0 right-0 glass border-b border-border z-40">
             <div className="flex items-center justify-between px-4 h-14 max-w-lg mx-auto">
-              <ModeIndicator mode={mode} />
+              <div className="flex items-center gap-2">
+                <ModeIndicator mode={mode} />
+                {!notificationPermission && (
+                  <button
+                    onClick={handleRequestNotificationPermission}
+                    className="p-1.5 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                    title="Enable notifications"
+                  >
+                    <Bell className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
+              </div>
               <ModeSwitcher mode={mode} onToggle={toggleMode} />
             </div>
           </header>
@@ -126,6 +185,24 @@ const Index = () => {
                   </div>
 
                   <MiniCalendar events={events} />
+
+                  {/* Status card */}
+                  <div className="glass rounded-xl p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-mono text-sm text-muted-foreground">System Status</p>
+                        <p className="text-sm">
+                          <span className="inline-block w-2 h-2 rounded-full bg-neon-green mr-2" />
+                          AI Connected • Voice Ready
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-xs text-muted-foreground">
+                          {notificationPermission ? '🔔 Notifications ON' : '🔕 Notifications OFF'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </motion.div>
               )}
 

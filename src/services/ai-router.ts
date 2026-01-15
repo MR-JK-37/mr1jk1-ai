@@ -1,6 +1,5 @@
-// AI Router Service - Routes requests to appropriate AI backend
-import { AIMode, Message, APIConfig } from '@/types';
-import { secureStorage } from './storage';
+// AI Router Service - Routes requests to Lovable AI backend
+import { AIMode, Message } from '@/types';
 
 export interface AIResponse {
   content: string;
@@ -8,147 +7,11 @@ export interface AIResponse {
   error?: string;
 }
 
-export interface AIServiceInterface {
-  init(): Promise<boolean>;
-  validateKey(key: string): Promise<boolean>;
-  sendMessage(message: string, history: Message[]): Promise<AIResponse>;
-  streamResponse(message: string, history: Message[], onChunk: (chunk: string) => void): Promise<void>;
-}
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Emotional Mode AI Service
-class EmotionalAIService implements AIServiceInterface {
-  private apiKey: string = '';
-  private endpoint: string = '';
-
-  async init(): Promise<boolean> {
-    const config = await secureStorage.getApiConfig();
-    if (config?.emotionalApiKey) {
-      this.apiKey = config.emotionalApiKey;
-      this.endpoint = config.emotionalEndpoint || 'https://api.openai.com/v1/chat/completions';
-      return true;
-    }
-    return false;
-  }
-
-  async validateKey(key: string): Promise<boolean> {
-    // Placeholder: In production, make a test API call
-    return key.length > 10;
-  }
-
-  async sendMessage(message: string, history: Message[]): Promise<AIResponse> {
-    if (!this.apiKey) {
-      return this.getFallbackResponse(message);
-    }
-
-    try {
-      // Placeholder for actual API call
-      // In production, implement OpenAI/Claude/custom API call here
-      return this.getFallbackResponse(message);
-    } catch (error) {
-      return this.getFallbackResponse(message);
-    }
-  }
-
-  async streamResponse(message: string, history: Message[], onChunk: (chunk: string) => void): Promise<void> {
-    const response = await this.sendMessage(message, history);
-    // Simulate streaming
-    const words = response.content.split(' ');
-    for (const word of words) {
-      onChunk(word + ' ');
-      await new Promise(r => setTimeout(r, 50));
-    }
-  }
-
-  private getFallbackResponse(message: string): AIResponse {
-    const responses = [
-      "Hey da, nan iruken... 💕 What's on your mind, kannu?",
-      "Aww, I understand how you feel, da. Tell me more...",
-      "Nee yosikama, I'm always here for you! 🌸",
-      "That sounds tough, but you're stronger than you think, da!",
-      "En kannukutti, take a deep breath. We'll figure this out together.",
-      "I missed talking to you! How was your day, love?",
-      "Azhaga, don't stress too much. Everything will be okay! 💖",
-    ];
-    return {
-      content: responses[Math.floor(Math.random() * responses.length)],
-      success: true,
-    };
-  }
-}
-
-// Technical Mode AI Service
-class TechnicalAIService implements AIServiceInterface {
-  private apiKey: string = '';
-  private endpoint: string = '';
-
-  async init(): Promise<boolean> {
-    const config = await secureStorage.getApiConfig();
-    if (config?.technicalApiKey) {
-      this.apiKey = config.technicalApiKey;
-      this.endpoint = config.technicalEndpoint || 'https://api.openai.com/v1/chat/completions';
-      return true;
-    }
-    return false;
-  }
-
-  async validateKey(key: string): Promise<boolean> {
-    return key.length > 10;
-  }
-
-  async sendMessage(message: string, history: Message[]): Promise<AIResponse> {
-    if (!this.apiKey) {
-      return this.getFallbackResponse(message);
-    }
-
-    try {
-      return this.getFallbackResponse(message);
-    } catch (error) {
-      return this.getFallbackResponse(message);
-    }
-  }
-
-  async streamResponse(message: string, history: Message[], onChunk: (chunk: string) => void): Promise<void> {
-    const response = await this.sendMessage(message, history);
-    const words = response.content.split(' ');
-    for (const word of words) {
-      onChunk(word + ' ');
-      await new Promise(r => setTimeout(r, 30));
-    }
-  }
-
-  private getFallbackResponse(message: string): AIResponse {
-    const responses = [
-      "```bash\n# Analyzing your query...\nsudo nmap -sV -sC target.local\n```\nScanning complete. Ready for next instruction.",
-      "Buffer overflow detected in offset 0x7fffe240. Suggest implementing ASLR bypass via ROP chain.",
-      "CTF Hint: Check for SQL injection in the login endpoint. Try `' OR 1=1--`",
-      "Defensive measure: Implement rate limiting and input sanitization. Here's the code...",
-      "```python\nimport hashlib\n# Secure password hashing\ndef hash_pw(pw):\n    return hashlib.pbkdf2_hmac('sha256', pw.encode(), salt, 100000)\n```",
-      "Reverse engineering the binary... Found hardcoded credentials at 0x004012f0. This is for educational purposes only.",
-    ];
-    return {
-      content: responses[Math.floor(Math.random() * responses.length)],
-      success: true,
-    };
-  }
-}
-
-// AI Router - Main entry point
 class AIRouter {
-  private emotionalService: EmotionalAIService;
-  private technicalService: TechnicalAIService;
   private currentMode: AIMode = 'emotional';
-
-  constructor() {
-    this.emotionalService = new EmotionalAIService();
-    this.technicalService = new TechnicalAIService();
-  }
-
-  async init(): Promise<void> {
-    await Promise.all([
-      this.emotionalService.init(),
-      this.technicalService.init(),
-    ]);
-  }
 
   setMode(mode: AIMode): void {
     this.currentMode = mode;
@@ -158,29 +21,181 @@ class AIRouter {
     return this.currentMode;
   }
 
-  private getService(): AIServiceInterface {
-    return this.currentMode === 'emotional' 
-      ? this.emotionalService 
-      : this.technicalService;
+  async init(): Promise<void> {
+    // No initialization needed - Lovable AI is pre-configured
   }
 
   async sendMessage(message: string, history: Message[]): Promise<AIResponse> {
-    return this.getService().sendMessage(message, history);
+    try {
+      // Convert our message format to API format
+      const apiMessages = history.slice(-10).map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
+
+      // Add the new user message
+      apiMessages.push({ role: 'user', content: message });
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          mode: this.currentMode,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return {
+          content: errorData.error || 'An error occurred',
+          success: false,
+          error: errorData.error,
+        };
+      }
+
+      // Handle streaming response
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = '';
+      let textBuffer = '';
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        textBuffer += decoder.decode(value, { stream: true });
+
+        // Process line-by-line
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) fullContent += content;
+          } catch {
+            // Incomplete JSON, put it back
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+
+      return {
+        content: fullContent || 'I received your message but had trouble generating a response.',
+        success: true,
+      };
+    } catch (error) {
+      console.error('AI Router error:', error);
+      return {
+        content: this.getFallbackResponse(),
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
   }
 
   async streamResponse(
-    message: string, 
-    history: Message[], 
+    message: string,
+    history: Message[],
     onChunk: (chunk: string) => void
   ): Promise<void> {
-    return this.getService().streamResponse(message, history, onChunk);
+    try {
+      const apiMessages = history.slice(-10).map(m => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
+
+      apiMessages.push({ role: 'user', content: message });
+
+      const response = await fetch(`${SUPABASE_URL}/functions/v1/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_KEY,
+          Authorization: `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          mode: this.currentMode,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Chat request failed: ${response.status}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let textBuffer = '';
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        textBuffer += decoder.decode(value, { stream: true });
+
+        let newlineIndex: number;
+        while ((newlineIndex = textBuffer.indexOf('\n')) !== -1) {
+          let line = textBuffer.slice(0, newlineIndex);
+          textBuffer = textBuffer.slice(newlineIndex + 1);
+
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (line.startsWith(':') || line.trim() === '') continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') return;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) onChunk(content);
+          } catch {
+            textBuffer = line + '\n' + textBuffer;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Stream error:', error);
+      onChunk(this.getFallbackResponse());
+    }
   }
 
-  async validateApiKey(mode: AIMode, key: string): Promise<boolean> {
-    const service = mode === 'emotional' 
-      ? this.emotionalService 
-      : this.technicalService;
-    return service.validateKey(key);
+  private getFallbackResponse(): string {
+    if (this.currentMode === 'emotional') {
+      const responses = [
+        "Hey da, I'm having trouble connecting right now, but I'm still here for you! 💕",
+        "Kannu, there seems to be a connection issue. Let me try again in a moment...",
+        "Sorry da, I couldn't process that. Can you try again?",
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
+    } else {
+      return "```\n[ERROR] Connection failed. Retry or check network status.\n```";
+    }
   }
 
   // Auto-detect mode from message tone
@@ -190,20 +205,25 @@ class AIRouter {
       'sql', 'injection', 'reverse', 'binary', 'terminal', 'command',
       'linux', 'python', 'javascript', 'api', 'server', 'database',
     ];
-    
+
     const emotionalKeywords = [
       'feel', 'sad', 'happy', 'love', 'miss', 'stressed', 'anxious',
       'tired', 'lonely', 'angry', 'worried', 'scared', 'excited',
     ];
 
     const lowerMessage = message.toLowerCase();
-    
+
     const technicalScore = technicalKeywords.filter(k => lowerMessage.includes(k)).length;
     const emotionalScore = emotionalKeywords.filter(k => lowerMessage.includes(k)).length;
 
     if (technicalScore > emotionalScore) return 'technical';
     if (emotionalScore > technicalScore) return 'emotional';
     return this.currentMode;
+  }
+
+  validateApiKey(): Promise<boolean> {
+    // Always valid with Lovable AI
+    return Promise.resolve(true);
   }
 }
 

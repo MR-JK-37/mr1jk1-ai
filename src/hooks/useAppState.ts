@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { AIMode, Message, Reminder, CalendarEvent, APIConfig } from '@/types';
 import { storage, secureStorage } from '@/services/storage';
 import { aiRouter } from '@/services/ai-router';
+import { notificationService } from '@/services/notifications';
 
 export function useAppState() {
   const [mode, setModeState] = useState<AIMode>('emotional');
@@ -34,6 +35,14 @@ export function useAppState() {
         
         aiRouter.setMode(savedMode);
         await aiRouter.init();
+
+        // Request notification permission
+        await notificationService.requestPermission();
+
+        // Schedule notifications for existing reminders
+        for (const reminder of savedReminders.filter(r => !r.completed)) {
+          await notificationService.scheduleReminder(reminder);
+        }
       } catch (error) {
         console.error('Failed to load state:', error);
       } finally {
@@ -83,6 +92,10 @@ export function useAppState() {
     const updatedReminders = [...reminders, newReminder];
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
+    
+    // Schedule notification
+    await notificationService.scheduleReminder(newReminder);
+    
     return newReminder;
   }, [reminders]);
 
@@ -92,12 +105,21 @@ export function useAppState() {
     );
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
+    
+    // Cancel notification if completed
+    const reminder = updatedReminders.find(r => r.id === id);
+    if (reminder?.completed) {
+      await notificationService.cancelReminder(id);
+    }
   }, [reminders]);
 
   const deleteReminder = useCallback(async (id: string) => {
     const updatedReminders = reminders.filter(r => r.id !== id);
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
+    
+    // Cancel notification
+    await notificationService.cancelReminder(id);
   }, [reminders]);
 
   // Event management

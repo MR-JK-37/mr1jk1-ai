@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Paperclip, Mic, MicOff, X, Image, FileText, Film } from 'lucide-react';
+import { Send, Paperclip, Mic, MicOff, X, Image, FileText, Film, Volume2, VolumeX } from 'lucide-react';
 import { Message, AIMode, Attachment } from '@/types';
 import { ModeIndicator } from './ModeSwitcher';
-import { aiRouter } from '@/services/ai-router';
+import { voiceService } from '@/services/voice';
+import { toast } from 'sonner';
 
 interface ChatInterfaceProps {
   mode: AIMode;
@@ -15,9 +16,12 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [autoSpeak, setAutoSpeak] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const lastAssistantMessageRef = useRef<string>('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -26,6 +30,34 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Auto-speak new assistant messages
+  useEffect(() => {
+    if (!autoSpeak || messages.length === 0) return;
+    
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage.role === 'assistant' && 
+      lastMessage.content !== lastAssistantMessageRef.current &&
+      lastMessage.content.length > 0 &&
+      lastMessage.content.length < 500 // Don't speak very long messages
+    ) {
+      lastAssistantMessageRef.current = lastMessage.content;
+      handleSpeak(lastMessage.content);
+    }
+  }, [messages, autoSpeak, mode]);
+
+  const handleSpeak = async (text: string) => {
+    try {
+      setIsSpeaking(true);
+      await voiceService.speak(text, mode);
+    } catch (error) {
+      console.error('TTS error:', error);
+      toast.error('Voice playback failed');
+    } finally {
+      setIsSpeaking(false);
+    }
+  };
 
   const handleSend = async () => {
     if (!input.trim() && attachments.length === 0) return;
@@ -69,9 +101,37 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
     setAttachments(prev => prev.filter(a => a.id !== id));
   };
 
-  const toggleListening = () => {
-    // Placeholder for voice recognition
-    setIsListening(!isListening);
+  const toggleListening = useCallback(async () => {
+    if (isListening) {
+      voiceService.stopListening();
+      setIsListening(false);
+      return;
+    }
+
+    try {
+      setIsListening(true);
+      await voiceService.startListening(
+        (transcript) => {
+          setInput(prev => prev + (prev ? ' ' : '') + transcript);
+          setIsListening(false);
+          toast.success('Voice captured!');
+        },
+        (error) => {
+          console.error('STT error:', error);
+          toast.error('Voice recognition failed');
+          setIsListening(false);
+        }
+      );
+    } catch (error) {
+      console.error('Failed to start listening:', error);
+      toast.error('Microphone access denied');
+      setIsListening(false);
+    }
+  }, [isListening]);
+
+  const toggleAutoSpeak = () => {
+    setAutoSpeak(!autoSpeak);
+    toast.info(autoSpeak ? 'Auto-speak disabled' : 'Auto-speak enabled');
   };
 
   const getAttachmentIcon = (type: Attachment['type']) => {
@@ -108,6 +168,9 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 ? "I'm here whenever you need to talk, da. What's on your mind?"
                 : "System initialized. Awaiting your commands. Let's hack the planet."}
             </p>
+            <p className="text-xs text-muted-foreground mt-4 font-mono">
+              {isEmotional ? '🎤 Voice enabled • Real AI powered' : '[ AI • VOICE • READY ]'}
+            </p>
           </motion.div>
         )}
 
@@ -131,8 +194,15 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 }`}
               >
                 {message.role === 'assistant' && (
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center justify-between gap-2 mb-2">
                     <ModeIndicator mode={message.mode} />
+                    <button
+                      onClick={() => handleSpeak(message.content)}
+                      className="p-1 hover:bg-background/50 rounded transition-colors"
+                      title="Speak this message"
+                    >
+                      <Volume2 className="w-3 h-3 text-muted-foreground" />
+                    </button>
                   </div>
                 )}
                 
@@ -249,12 +319,27 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
             <Paperclip className="w-5 h-5" />
           </motion.button>
 
+          {/* Auto-speak toggle */}
+          <motion.button
+            onClick={toggleAutoSpeak}
+            className={`p-3 rounded-xl transition-colors ${
+              autoSpeak 
+                ? 'bg-primary/20 text-primary' 
+                : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+            }`}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            title={autoSpeak ? 'Disable auto-speak' : 'Enable auto-speak'}
+          >
+            {autoSpeak ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+          </motion.button>
+
           {/* Voice input */}
           <motion.button
             onClick={toggleListening}
             className={`p-3 rounded-xl transition-colors ${
               isListening 
-                ? 'bg-destructive text-destructive-foreground' 
+                ? 'bg-destructive text-destructive-foreground animate-pulse' 
                 : 'bg-muted hover:bg-muted/80 text-muted-foreground'
             }`}
             whileHover={{ scale: 1.05 }}
