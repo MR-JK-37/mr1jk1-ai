@@ -89,7 +89,7 @@ export function IntroScreen({ onComplete }: IntroScreenProps) {
             >
               <span className="text-glow-cyan text-primary">Welcome</span>
               <br />
-              <span className="text-glow-pink text-secondary">Mr. JK</span>
+              <span className="text-glow-pink text-secondary">MR!JK!</span>
             </motion.h1>
           )}
 

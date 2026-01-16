@@ -10,13 +10,14 @@ import { ModeSwitcher, ModeIndicator } from '@/components/ModeSwitcher';
 import { Navigation } from '@/components/Navigation';
 import { SettingsPage } from '@/components/SettingsPage';
 import { AddReminderModal } from '@/components/AddReminderModal';
+import { NotesPage } from '@/components/NotesPage';
 import { useAppState } from '@/hooks/useAppState';
 import { aiRouter } from '@/services/ai-router';
 import { notificationService } from '@/services/notifications';
 import { Message, Attachment } from '@/types';
 import { toast } from 'sonner';
 
-type Tab = 'home' | 'chat' | 'calendar' | 'settings';
+type Tab = 'home' | 'chat' | 'calendar' | 'notes' | 'settings';
 
 const Index = () => {
   const {
@@ -30,6 +31,9 @@ const Index = () => {
     toggleReminder,
     deleteReminder,
     events,
+    notes,
+    addNote,
+    deleteNote,
     apiConfig,
     setApiConfig,
     isLoading,
@@ -70,7 +74,6 @@ const Index = () => {
     let assistantContent = '';
     
     // Create a placeholder message
-    const placeholderId = crypto.randomUUID();
     await addMessage({
       role: 'assistant',
       content: '',
@@ -83,14 +86,11 @@ const Index = () => {
         messages,
         (chunk) => {
           assistantContent += chunk;
-          // Update the last message with streaming content
-          // Note: This is handled by the addMessage creating a new message
         }
       );
 
       // Update the placeholder with final content
       if (assistantContent) {
-        // Remove the empty placeholder and add final message
         await addMessage({
           role: 'assistant',
           content: assistantContent,
@@ -107,7 +107,7 @@ const Index = () => {
     const granted = await notificationService.requestPermission();
     setNotificationPermission(granted);
     if (granted) {
-      toast.success('Notifications enabled!');
+      toast.success('Notifications enabled for MR!JK!');
     } else {
       toast.error('Notification permission denied');
     }
@@ -136,7 +136,7 @@ const Index = () => {
       {hasSeenIntro && (
         <>
           {/* Header */}
-          <header className="fixed top-0 left-0 right-0 glass border-b border-border z-40">
+          <header className="fixed top-0 left-0 right-0 glass border-b border-border z-40 safe-area-pt">
             <div className="flex items-center justify-between px-4 h-14 max-w-lg mx-auto">
               <div className="flex items-center gap-2">
                 <ModeIndicator mode={mode} />
@@ -163,16 +163,17 @@ const Index = () => {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
                   className="p-4 max-w-lg mx-auto space-y-4"
                 >
                   <HackerClock />
                   
                   <div className="glass rounded-xl p-4">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="font-mono font-medium">Reminders</h2>
+                      <h2 className="font-mono font-medium text-primary">// REMINDERS</h2>
                       <button
                         onClick={() => setShowAddReminder(true)}
-                        className="p-2 bg-primary/20 hover:bg-primary/30 rounded-lg transition-colors"
+                        className="p-2 bg-primary/20 hover:bg-primary/30 rounded-lg transition-colors hover:scale-105 active:scale-95"
                       >
                         <Plus className="w-4 h-4 text-primary" />
                       </button>
@@ -190,15 +191,15 @@ const Index = () => {
                   <div className="glass rounded-xl p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-mono text-sm text-muted-foreground">System Status</p>
-                        <p className="text-sm">
-                          <span className="inline-block w-2 h-2 rounded-full bg-neon-green mr-2" />
-                          AI Connected • Voice Ready
+                        <p className="font-mono text-sm text-muted-foreground">// SYSTEM_STATUS</p>
+                        <p className="text-sm font-mono">
+                          <span className="inline-block w-2 h-2 rounded-full bg-neon-green mr-2 animate-pulse" />
+                          AI: CONNECTED | VOICE: READY
                         </p>
                       </div>
                       <div className="text-right">
                         <p className="font-mono text-xs text-muted-foreground">
-                          {notificationPermission ? '🔔 Notifications ON' : '🔕 Notifications OFF'}
+                          {notificationPermission ? '🔔 ALERTS: ON' : '🔕 ALERTS: OFF'}
                         </p>
                       </div>
                     </div>
@@ -212,6 +213,7 @@ const Index = () => {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
                   className="h-[calc(100vh-7.5rem)]"
                 >
                   <ChatInterface
@@ -228,16 +230,17 @@ const Index = () => {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20 }}
+                  transition={{ duration: 0.2 }}
                   className="p-4 max-w-lg mx-auto space-y-4"
                 >
                   <MiniCalendar events={events} />
                   
                   <div className="glass rounded-xl p-4">
                     <div className="flex items-center justify-between mb-4">
-                      <h2 className="font-mono font-medium">All Reminders</h2>
+                      <h2 className="font-mono font-medium text-primary">// ALL_REMINDERS</h2>
                       <button
                         onClick={() => setShowAddReminder(true)}
-                        className="p-2 bg-primary/20 hover:bg-primary/30 rounded-lg transition-colors"
+                        className="p-2 bg-primary/20 hover:bg-primary/30 rounded-lg transition-colors hover:scale-105 active:scale-95"
                       >
                         <Plus className="w-4 h-4 text-primary" />
                       </button>
@@ -249,6 +252,14 @@ const Index = () => {
                     />
                   </div>
                 </motion.div>
+              )}
+
+              {activeTab === 'notes' && (
+                <NotesPage
+                  notes={notes}
+                  onAddNote={addNote}
+                  onDeleteNote={deleteNote}
+                />
               )}
             </AnimatePresence>
           </main>

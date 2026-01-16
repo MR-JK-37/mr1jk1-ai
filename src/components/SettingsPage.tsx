@@ -22,14 +22,14 @@ export function SettingsPage({ apiConfig, onSave, onClose }: SettingsPageProps) 
 
   const validateEmotionalKey = async () => {
     setIsValidating(true);
-    const valid = await aiRouter.validateApiKey('emotional', emotionalKey);
+    const valid = await aiRouter.validateApiKey();
     setEmotionalValid(valid);
     setIsValidating(false);
   };
 
   const validateTechnicalKey = async () => {
     setIsValidating(true);
-    const valid = await aiRouter.validateApiKey('technical', technicalKey);
+    const valid = await aiRouter.validateApiKey();
     setTechnicalValid(valid);
     setIsValidating(false);
   };
