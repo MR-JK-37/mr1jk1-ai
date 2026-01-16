@@ -188,9 +188,9 @@ class AIRouter {
   private getFallbackResponse(): string {
     if (this.currentMode === 'emotional') {
       const responses = [
-        "Hey da, I'm having trouble connecting right now, but I'm still here for you! 💕",
+        "Hey MR!JK!, I'm having trouble connecting right now, but I'm still here for you! 💕",
         "Kannu, there seems to be a connection issue. Let me try again in a moment...",
-        "Sorry da, I couldn't process that. Can you try again?",
+        "Sorry MR!JK!, I couldn't process that. Can you try again?",
       ];
       return responses[Math.floor(Math.random() * responses.length)];
     } else {

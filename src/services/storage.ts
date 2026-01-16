@@ -1,13 +1,15 @@
 // Secure storage service - uses localStorage for demo, replace with Capacitor SecureStorage in production
-import { APIConfig, Message, Reminder, CalendarEvent, AIMode } from '@/types';
+import { APIConfig, Message, Reminder, CalendarEvent, AIMode, Note } from '@/types';
 
 const STORAGE_KEYS = {
   API_CONFIG: 'jk_assistant_api_config',
   MESSAGES: 'jk_assistant_messages',
   REMINDERS: 'jk_assistant_reminders',
   EVENTS: 'jk_assistant_events',
+  NOTES: 'jk_assistant_notes',
   MODE: 'jk_assistant_mode',
   INTRO_SEEN: 'jk_assistant_intro_seen',
+  LAST_DAILY_RESET: 'jk_assistant_last_daily_reset',
 };
 
 // In production, replace with Capacitor SecureStorage or platform keystore
@@ -54,6 +56,7 @@ export const storage = {
     return JSON.parse(data).map((r: Reminder) => ({
       ...r,
       datetime: new Date(r.datetime),
+      type: r.type || 'event', // Default to event for backward compatibility
     }));
   },
 
@@ -69,6 +72,20 @@ export const storage = {
       ...e,
       start: new Date(e.start),
       end: new Date(e.end),
+    }));
+  },
+
+  // Notes
+  async saveNotes(notes: Note[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.NOTES, JSON.stringify(notes));
+  },
+
+  async getNotes(): Promise<Note[]> {
+    const data = localStorage.getItem(STORAGE_KEYS.NOTES);
+    if (!data) return [];
+    return JSON.parse(data).map((n: Note) => ({
+      ...n,
+      timestamp: new Date(n.timestamp),
     }));
   },
 
@@ -88,5 +105,14 @@ export const storage = {
 
   async hasSeenIntro(): Promise<boolean> {
     return localStorage.getItem(STORAGE_KEYS.INTRO_SEEN) === 'true';
+  },
+
+  // Daily reset tracking
+  async getLastDailyReset(): Promise<string | null> {
+    return localStorage.getItem(STORAGE_KEYS.LAST_DAILY_RESET);
+  },
+
+  async setLastDailyReset(date: string): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.LAST_DAILY_RESET, date);
   },
 };

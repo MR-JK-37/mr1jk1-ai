@@ -1,5 +1,7 @@
 export type AIMode = 'emotional' | 'technical';
 
+export type ReminderType = 'daily' | 'event';
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -24,6 +26,8 @@ export interface Reminder {
   datetime: Date;
   completed: boolean;
   category: 'task' | 'ctf' | 'personal' | 'work';
+  type: ReminderType; // 'daily' auto-resets, 'event' auto-deletes
+  notificationId?: number;
 }
 
 export interface CalendarEvent {
@@ -32,6 +36,13 @@ export interface CalendarEvent {
   start: Date;
   end: Date;
   color?: string;
+  label?: 'CTF' | 'MISSION' | 'TASK';
+}
+
+export interface Note {
+  id: string;
+  content: string;
+  timestamp: Date;
 }
 
 export interface APIConfig {
@@ -46,6 +57,7 @@ export interface AppState {
   messages: Message[];
   reminders: Reminder[];
   events: CalendarEvent[];
+  notes: Note[];
   apiConfig: APIConfig;
   isListening: boolean;
   isSpeaking: boolean;

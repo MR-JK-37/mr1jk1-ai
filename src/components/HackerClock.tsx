@@ -22,17 +22,32 @@ export function HackerClock() {
 
   return (
     <motion.div 
-      className="glass rounded-xl p-6 text-center"
+      className="glass rounded-xl p-6 text-center relative overflow-hidden"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
     >
+      {/* Scanline effect */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-10">
+        <motion.div
+          className="absolute left-0 right-0 h-px bg-primary"
+          animate={{ top: ['0%', '100%'] }}
+          transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+        />
+      </div>
+
+      {/* Header */}
+      <div className="font-mono text-xs text-muted-foreground mb-4 flex items-center justify-center gap-2">
+        <span className="text-primary">$</span>
+        <span>SYSTEM_TIME // IST</span>
+      </div>
+
       {/* Time display */}
       <div className="font-mono text-5xl md:text-6xl font-bold tracking-wider mb-2">
         <span className="text-primary text-glow-cyan">{hours}</span>
         <motion.span 
           className="text-muted-foreground mx-1"
-          animate={{ opacity: [1, 0.3, 1] }}
+          animate={{ opacity: [1, 0.2, 1] }}
           transition={{ duration: 1, repeat: Infinity }}
         >
           :
@@ -40,12 +55,18 @@ export function HackerClock() {
         <span className="text-primary text-glow-cyan">{minutes}</span>
         <motion.span 
           className="text-muted-foreground mx-1"
-          animate={{ opacity: [1, 0.3, 1] }}
+          animate={{ opacity: [1, 0.2, 1] }}
           transition={{ duration: 1, repeat: Infinity }}
         >
           :
         </motion.span>
-        <span className="text-secondary text-glow-pink text-3xl md:text-4xl">{seconds}</span>
+        <motion.span 
+          className="text-secondary text-glow-pink text-3xl md:text-4xl"
+          animate={{ opacity: [1, 0.6, 1] }}
+          transition={{ duration: 1, repeat: Infinity }}
+        >
+          {seconds}
+        </motion.span>
       </div>
 
       {/* Date display */}
@@ -64,8 +85,10 @@ export function HackerClock() {
           <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse" />
           ONLINE
         </span>
-        <span>|</span>
+        <span className="text-border">|</span>
         <span>SYS: OK</span>
+        <span className="text-border">|</span>
+        <span className="text-primary">MR!JK!</span>
       </div>
     </motion.div>
   );
