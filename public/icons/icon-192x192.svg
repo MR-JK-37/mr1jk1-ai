@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" fill="none">
-  <rect width="192" height="192" fill="#0a0a0f"/>
-  <rect x="8" y="8" width="176" height="176" stroke="#00ffff" stroke-width="2" fill="none" opacity="0.3"/>
-  <text x="96" y="90" font-family="monospace" font-size="32" font-weight="bold" fill="#00ffff" text-anchor="middle">MR!JK!</text>
-  <text x="96" y="120" font-family="monospace" font-size="12" fill="#ff00ff" text-anchor="middle" opacity="0.8">AI ASSISTANT</text>
-  <circle cx="96" cy="150" r="6" fill="#00ff00" opacity="0.8">
-    <animate attributeName="opacity" values="0.8;0.3;0.8" dur="2s" repeatCount="indefinite"/>
-  </circle>
-</svg>
