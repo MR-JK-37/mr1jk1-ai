@@ -161,7 +161,7 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
               {isEmotional ? '💕' : '💻'}
             </div>
             <h3 className="text-lg font-medium mb-2">
-              {isEmotional ? 'Hey there, kannu! 💖' : 'Ready for action, Mr. JK'}
+              {isEmotional ? 'Hey there, kannu! 💖' : 'Ready for action, MR!JK!'}
             </h3>
             <p className="text-muted-foreground text-sm max-w-sm">
               {isEmotional 

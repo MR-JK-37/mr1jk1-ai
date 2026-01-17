@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check, Trash2, Flag, Clock, Code, User, Briefcase } from 'lucide-react';
+import { Check, Trash2, Flag, Clock, Code, User, Briefcase, RefreshCw, CalendarClock } from 'lucide-react';
 import { Reminder } from '@/types';
 import { format, isToday, isTomorrow } from 'date-fns';
 
@@ -73,6 +73,24 @@ export function RemindersList({ reminders, onToggle, onDelete }: RemindersListPr
                   <span className={`font-medium truncate ${reminder.completed ? 'line-through' : ''}`}>
                     {reminder.title}
                   </span>
+                  {/* Type badge */}
+                  <span className={`text-xs px-1.5 py-0.5 rounded font-mono ${
+                    reminder.type === 'daily' 
+                      ? 'bg-primary/20 text-primary' 
+                      : 'bg-secondary/20 text-secondary'
+                  }`}>
+                    {reminder.type === 'daily' ? (
+                      <span className="flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3" />
+                        DAILY
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        <CalendarClock className="w-3 h-3" />
+                        EVENT
+                      </span>
+                    )}
+                  </span>
                 </div>
                 
                 {reminder.description && (
@@ -87,13 +105,15 @@ export function RemindersList({ reminders, onToggle, onDelete }: RemindersListPr
                 </p>
               </div>
 
-              {/* Delete button */}
-              <button
-                onClick={() => onDelete(reminder.id)}
-                className="p-1 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+              {/* Delete button - only for event reminders */}
+              {reminder.type === 'event' && (
+                <button
+                  onClick={() => onDelete(reminder.id)}
+                  className="p-1 opacity-0 group-hover:opacity-100 hover:text-destructive transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </motion.div>
         ))}
