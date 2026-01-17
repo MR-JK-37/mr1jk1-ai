@@ -22,7 +22,7 @@ export function HackerClock() {
 
   return (
     <motion.div 
-      className="glass rounded-xl p-6 text-center relative overflow-hidden"
+      className="glass-glossy rounded-xl p-6 text-center relative overflow-hidden"
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5 }}
@@ -44,7 +44,7 @@ export function HackerClock() {
 
       {/* Time display */}
       <div className="font-mono text-5xl md:text-6xl font-bold tracking-wider mb-2">
-        <span className="text-primary text-glow-cyan">{hours}</span>
+        <span className="text-primary text-glow-blue">{hours}</span>
         <motion.span 
           className="text-muted-foreground mx-1"
           animate={{ opacity: [1, 0.2, 1] }}
@@ -52,7 +52,7 @@ export function HackerClock() {
         >
           :
         </motion.span>
-        <span className="text-primary text-glow-cyan">{minutes}</span>
+        <span className="text-primary text-glow-blue">{minutes}</span>
         <motion.span 
           className="text-muted-foreground mx-1"
           animate={{ opacity: [1, 0.2, 1] }}
@@ -61,7 +61,7 @@ export function HackerClock() {
           :
         </motion.span>
         <motion.span 
-          className="text-secondary text-glow-pink text-3xl md:text-4xl"
+          className="text-secondary text-3xl md:text-4xl"
           animate={{ opacity: [1, 0.6, 1] }}
           transition={{ duration: 1, repeat: Infinity }}
         >
@@ -82,7 +82,7 @@ export function HackerClock() {
       {/* Status bar */}
       <div className="mt-4 pt-4 border-t border-border/50 flex justify-center gap-4 text-xs font-mono text-muted-foreground">
         <span className="flex items-center gap-1">
-          <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse" />
+          <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           ONLINE
         </span>
         <span className="text-border">|</span>

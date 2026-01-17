@@ -40,11 +40,21 @@ export function IntroScreen({ onComplete }: IntroScreenProps) {
       <div className="absolute inset-0 opacity-5">
         <div className="w-full h-full" style={{
           backgroundImage: `
-            linear-gradient(hsl(var(--neon-cyan) / 0.1) 1px, transparent 1px),
-            linear-gradient(90deg, hsl(var(--neon-cyan) / 0.1) 1px, transparent 1px)
+            linear-gradient(hsl(var(--neon-blue) / 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, hsl(var(--neon-blue) / 0.1) 1px, transparent 1px)
           `,
           backgroundSize: '50px 50px',
         }} />
+      </div>
+
+      {/* Radial glow effect */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div 
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full opacity-20"
+          style={{
+            background: 'radial-gradient(circle, hsl(205 100% 55% / 0.3) 0%, transparent 70%)'
+          }}
+        />
       </div>
 
       {/* Scan line effect */}
@@ -73,7 +83,7 @@ export function IntroScreen({ onComplete }: IntroScreenProps) {
             >
               <span className="text-primary">root@jk-system</span>
               <span className="text-muted-foreground">:</span>
-              <span className="text-neon-pink">~</span>
+              <span className="text-secondary">~</span>
               <span className="text-muted-foreground">$ </span>
               <span className="text-foreground">./initialize.sh</span>
             </motion.div>
@@ -87,9 +97,9 @@ export function IntroScreen({ onComplete }: IntroScreenProps) {
               transition={{ duration: 0.5 }}
               className="text-5xl md:text-7xl font-bold font-mono mb-4 animate-flicker"
             >
-              <span className="text-glow-cyan text-primary">Welcome</span>
+              <span className="text-glow-blue text-primary">Welcome</span>
               <br />
-              <span className="text-glow-pink text-secondary">MR!JK!</span>
+              <span className="text-glow-cyan text-secondary">MR!JK!</span>
             </motion.h1>
           )}
 
