@@ -38,13 +38,13 @@ export function NotesPage({ notes, onAddNote, onDeleteNote }: NotesPageProps) {
       className="p-4 max-w-lg mx-auto space-y-4"
     >
       {/* Header */}
-      <div className="glass rounded-xl p-4">
+      <div className="glass-glossy rounded-xl p-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-neon-green/20 flex items-center justify-center">
-            <BookOpen className="w-5 h-5 text-neon-green" />
+          <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+            <BookOpen className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-mono font-bold text-lg text-neon-green text-glow-green">
+            <h2 className="font-mono font-bold text-lg text-primary text-glow-blue">
               // HACKER DIARY
             </h2>
             <p className="text-xs text-muted-foreground font-mono">
@@ -57,9 +57,9 @@ export function NotesPage({ notes, onAddNote, onDeleteNote }: NotesPageProps) {
       {/* New Note Input */}
       <form onSubmit={handleSubmit} className="glass rounded-xl p-4">
         <div className="font-mono text-xs text-muted-foreground mb-2 flex items-center gap-2">
-          <span className="text-neon-green">$</span>
+          <span className="text-primary">$</span>
           <span>new_entry.log</span>
-          <span className={`w-2 h-4 bg-neon-green ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
+          <span className={`w-2 h-4 bg-primary ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
         </div>
         <textarea
           ref={textareaRef}
@@ -67,13 +67,13 @@ export function NotesPage({ notes, onAddNote, onDeleteNote }: NotesPageProps) {
           onChange={(e) => setNewNote(e.target.value)}
           placeholder="Write your thoughts, MR!JK!..."
           rows={3}
-          className="w-full bg-transparent border-none resize-none font-mono text-neon-green focus:outline-none placeholder:text-muted-foreground/50"
+          className="w-full bg-transparent border-none resize-none font-mono text-primary focus:outline-none placeholder:text-muted-foreground/50"
         />
         <div className="flex justify-end mt-2">
           <button
             type="submit"
             disabled={!newNote.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-neon-green/20 hover:bg-neon-green/30 text-neon-green rounded-lg font-mono text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg font-mono text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="w-4 h-4" />
             SAVE LOG
@@ -106,12 +106,12 @@ export function NotesPage({ notes, onAddNote, onDeleteNote }: NotesPageProps) {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ delay: index * 0.05 }}
-                className="glass rounded-xl p-4 group hover:border-neon-green/30 border border-transparent transition-colors"
+                className="glass rounded-xl p-4 group hover:border-primary/30 border border-transparent transition-colors"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="font-mono text-xs text-primary mb-2 flex items-center gap-2">
-                      <span className="text-neon-green">&gt;</span>
+                      <span className="text-primary">&gt;</span>
                       <span>{format(new Date(note.timestamp), 'yyyy-MM-dd HH:mm:ss')}</span>
                     </div>
                     <p className="font-mono text-sm text-foreground/90 whitespace-pre-wrap break-words">

@@ -11,6 +11,7 @@ import { Navigation } from '@/components/Navigation';
 import { SettingsPage } from '@/components/SettingsPage';
 import { AddReminderModal } from '@/components/AddReminderModal';
 import { NotesPage } from '@/components/NotesPage';
+import { CTFEventsWidget } from '@/components/CTFEventsWidget';
 import { useAppState } from '@/hooks/useAppState';
 import { aiRouter } from '@/services/ai-router';
 import { notificationService } from '@/services/notifications';
@@ -187,13 +188,16 @@ const Index = () => {
 
                   <MiniCalendar events={events} />
 
+                  {/* CTF Events Widget */}
+                  <CTFEventsWidget onAddReminder={addReminder} />
+
                   {/* Status card */}
                   <div className="glass rounded-xl p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="font-mono text-sm text-muted-foreground">// SYSTEM_STATUS</p>
                         <p className="text-sm font-mono">
-                          <span className="inline-block w-2 h-2 rounded-full bg-neon-green mr-2 animate-pulse" />
+                          <span className="inline-block w-2 h-2 rounded-full bg-primary mr-2 animate-pulse" />
                           AI: CONNECTED | VOICE: READY
                         </p>
                       </div>

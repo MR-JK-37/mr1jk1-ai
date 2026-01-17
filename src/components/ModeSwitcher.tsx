@@ -17,8 +17,8 @@ export function ModeSwitcher({ mode, onToggle }: ModeSwitcherProps) {
       style={{
         background: isEmotional 
           ? 'linear-gradient(135deg, hsl(340 80% 65% / 0.3), hsl(280 80% 60% / 0.3))'
-          : 'linear-gradient(135deg, hsl(168 100% 50% / 0.3), hsl(120 100% 50% / 0.3))',
-        border: `1px solid ${isEmotional ? 'hsl(340 80% 65% / 0.5)' : 'hsl(168 100% 50% / 0.5)'}`,
+          : 'linear-gradient(135deg, hsl(205 100% 55% / 0.3), hsl(185 100% 50% / 0.3))',
+        border: `1px solid ${isEmotional ? 'hsl(340 80% 65% / 0.5)' : 'hsl(205 100% 55% / 0.5)'}`,
       }}
       whileHover={{ scale: 1.05 }}
       whileTap={{ scale: 0.95 }}
@@ -27,10 +27,10 @@ export function ModeSwitcher({ mode, onToggle }: ModeSwitcherProps) {
         className="absolute top-1 w-8 h-8 rounded-full flex items-center justify-center"
         animate={{
           left: isEmotional ? '4px' : 'calc(100% - 36px)',
-          backgroundColor: isEmotional ? 'hsl(340 80% 65%)' : 'hsl(168 100% 50%)',
+          backgroundColor: isEmotional ? 'hsl(340 80% 65%)' : 'hsl(205 100% 55%)',
           boxShadow: isEmotional 
             ? '0 0 15px hsl(340 80% 65% / 0.5)' 
-            : '0 0 15px hsl(168 100% 50% / 0.5)',
+            : '0 0 15px hsl(205 100% 55% / 0.5)',
         }}
         transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       >
@@ -57,8 +57,8 @@ export function ModeIndicator({ mode }: { mode: AIMode }) {
     <motion.div
       className="flex items-center gap-2 px-3 py-1.5 rounded-full font-mono text-xs"
       animate={{
-        backgroundColor: isEmotional ? 'hsl(340 80% 65% / 0.15)' : 'hsl(168 100% 50% / 0.15)',
-        borderColor: isEmotional ? 'hsl(340 80% 65% / 0.3)' : 'hsl(168 100% 50% / 0.3)',
+        backgroundColor: isEmotional ? 'hsl(340 80% 65% / 0.15)' : 'hsl(205 100% 55% / 0.15)',
+        borderColor: isEmotional ? 'hsl(340 80% 65% / 0.3)' : 'hsl(205 100% 55% / 0.3)',
       }}
       style={{ border: '1px solid' }}
     >
