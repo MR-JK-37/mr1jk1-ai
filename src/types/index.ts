@@ -2,6 +2,8 @@ export type AIMode = 'emotional' | 'technical';
 
 export type ReminderType = 'daily' | 'event';
 
+export type ResponseLength = 'concise' | 'balanced' | 'detailed';
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -9,6 +11,15 @@ export interface Message {
   timestamp: Date;
   mode: AIMode;
   attachments?: Attachment[];
+}
+
+export interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  createdAt: Date;
+  updatedAt: Date;
+  mode: AIMode;
 }
 
 export interface Attachment {
@@ -45,6 +56,13 @@ export interface Note {
   timestamp: Date;
 }
 
+export interface VoiceSettings {
+  enabled: boolean;
+  volume: number; // 0-1
+  speed: 'slow' | 'normal' | 'fast';
+  autoSpeak: boolean;
+}
+
 export interface APIConfig {
   emotionalApiKey: string;
   technicalApiKey: string;
@@ -52,13 +70,21 @@ export interface APIConfig {
   technicalEndpoint?: string;
 }
 
+export interface AppSettings {
+  voiceSettings: VoiceSettings;
+  responseLength: ResponseLength;
+}
+
 export interface AppState {
   mode: AIMode;
   messages: Message[];
+  chatSessions: ChatSession[];
+  currentSessionId: string | null;
   reminders: Reminder[];
   events: CalendarEvent[];
   notes: Note[];
   apiConfig: APIConfig;
+  settings: AppSettings;
   isListening: boolean;
   isSpeaking: boolean;
 }

@@ -1,20 +1,36 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AIMode, Message, Reminder, CalendarEvent, APIConfig, Note } from '@/types';
+import { AIMode, Message, Reminder, CalendarEvent, APIConfig, Note, ChatSession, AppSettings } from '@/types';
 import { storage, secureStorage } from '@/services/storage';
 import { aiRouter } from '@/services/ai-router';
 import { notificationService } from '@/services/notifications';
 
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  voiceSettings: {
+    enabled: true,
+    volume: 0.8,
+    speed: 'normal',
+    autoSpeak: true,
+  },
+  responseLength: 'concise',
+};
+
 export function useAppState() {
   const [mode, setModeState] = useState<AIMode>('emotional');
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [apiConfig, setApiConfigState] = useState<APIConfig | null>(null);
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS);
   const [isLoading, setIsLoading] = useState(true);
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
   
   const dailyResetInterval = useRef<number | null>(null);
+
+  // Get current session's messages
+  const currentSession = chatSessions.find(s => s.id === currentSessionId);
+  const messages = currentSession?.messages || [];
 
   // Check and reset daily reminders at midnight
   const checkDailyReset = useCallback(async (currentReminders: Reminder[]) => {
@@ -22,24 +38,19 @@ export function useAppState() {
     const lastReset = await storage.getLastDailyReset();
 
     if (lastReset !== today) {
-      // It's a new day - reset daily reminders
       const updatedReminders = currentReminders.map(r => {
         if (r.type === 'daily') {
-          // Reset to today with same time
           const newDatetime = new Date(r.datetime);
           const now = new Date();
           newDatetime.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
-          
           return { ...r, completed: false, datetime: newDatetime };
         }
         return r;
       });
 
-      // Remove expired event reminders
       const now = new Date();
       const filteredReminders = updatedReminders.filter(r => {
         if (r.type === 'event' && new Date(r.datetime) < now) {
-          // Auto-delete expired events
           notificationService.cancelReminder(r.id);
           return false;
         }
@@ -50,7 +61,6 @@ export function useAppState() {
       await storage.saveReminders(filteredReminders);
       await storage.setLastDailyReset(today);
 
-      // Reschedule daily reminders
       for (const reminder of filteredReminders.filter(r => r.type === 'daily' && !r.completed)) {
         await notificationService.rescheduleDaily(reminder);
       }
@@ -61,34 +71,44 @@ export function useAppState() {
   useEffect(() => {
     const loadState = async () => {
       try {
-        const [savedMode, savedMessages, savedReminders, savedEvents, savedNotes, savedConfig, introSeen] = await Promise.all([
+        const [
+          savedMode, 
+          savedSessions, 
+          savedSessionId,
+          savedReminders, 
+          savedEvents, 
+          savedNotes, 
+          savedConfig, 
+          savedSettings,
+          introSeen
+        ] = await Promise.all([
           storage.getMode(),
-          storage.getMessages(),
+          storage.getChatSessions(),
+          storage.getCurrentSessionId(),
           storage.getReminders(),
           storage.getEvents(),
           storage.getNotes(),
           secureStorage.getApiConfig(),
+          storage.getAppSettings(),
           storage.hasSeenIntro(),
         ]);
 
         setModeState(savedMode);
-        setMessages(savedMessages);
+        setChatSessions(savedSessions);
+        setCurrentSessionId(savedSessionId);
         setReminders(savedReminders);
         setEvents(savedEvents);
         setNotes(savedNotes);
         setApiConfigState(savedConfig);
+        setAppSettings(savedSettings);
         setHasSeenIntro(introSeen);
         
         aiRouter.setMode(savedMode);
         await aiRouter.init();
 
-        // Request notification permission
         await notificationService.requestPermission();
-
-        // Check for daily reset
         await checkDailyReset(savedReminders);
 
-        // Schedule notifications for existing reminders
         for (const reminder of savedReminders.filter(r => !r.completed)) {
           if (reminder.type === 'daily') {
             await notificationService.rescheduleDaily(reminder);
@@ -105,7 +125,6 @@ export function useAppState() {
 
     loadState();
 
-    // Set up midnight check interval
     const checkMidnight = () => {
       const now = new Date();
       const tomorrow = new Date(now);
@@ -117,7 +136,7 @@ export function useAppState() {
       dailyResetInterval.current = window.setTimeout(async () => {
         const currentReminders = await storage.getReminders();
         await checkDailyReset(currentReminders);
-        checkMidnight(); // Reschedule for next midnight
+        checkMidnight();
       }, msUntilMidnight);
     };
 
@@ -142,6 +161,52 @@ export function useAppState() {
     setMode(newMode);
   }, [mode, setMode]);
 
+  // Chat session management
+  const createNewSession = useCallback(async () => {
+    const newSession: ChatSession = {
+      id: crypto.randomUUID(),
+      title: 'New Chat',
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      mode,
+    };
+    
+    const updatedSessions = [newSession, ...chatSessions];
+    setChatSessions(updatedSessions);
+    setCurrentSessionId(newSession.id);
+    
+    await storage.saveChatSessions(updatedSessions);
+    await storage.saveCurrentSessionId(newSession.id);
+    
+    return newSession;
+  }, [chatSessions, mode]);
+
+  const selectSession = useCallback(async (sessionId: string) => {
+    setCurrentSessionId(sessionId);
+    await storage.saveCurrentSessionId(sessionId);
+  }, []);
+
+  const deleteSession = useCallback(async (sessionId: string) => {
+    const updatedSessions = chatSessions.filter(s => s.id !== sessionId);
+    setChatSessions(updatedSessions);
+    
+    if (currentSessionId === sessionId) {
+      const newCurrentId = updatedSessions.length > 0 ? updatedSessions[0].id : null;
+      setCurrentSessionId(newCurrentId);
+      await storage.saveCurrentSessionId(newCurrentId);
+    }
+    
+    await storage.saveChatSessions(updatedSessions);
+  }, [chatSessions, currentSessionId]);
+
+  const clearAllSessions = useCallback(async () => {
+    setChatSessions([]);
+    setCurrentSessionId(null);
+    await storage.saveChatSessions([]);
+    await storage.saveCurrentSessionId(null);
+  }, []);
+
   // Message management
   const addMessage = useCallback(async (message: Omit<Message, 'id' | 'timestamp'>) => {
     const newMessage: Message = {
@@ -149,16 +214,68 @@ export function useAppState() {
       id: crypto.randomUUID(),
       timestamp: new Date(),
     };
-    const updatedMessages = [...messages, newMessage];
-    setMessages(updatedMessages);
-    await storage.saveMessages(updatedMessages);
-    return newMessage;
-  }, [messages]);
 
-  const clearMessages = useCallback(async () => {
-    setMessages([]);
-    await storage.saveMessages([]);
-  }, []);
+    let sessionId = currentSessionId;
+    let updatedSessions = [...chatSessions];
+
+    // Create new session if none exists
+    if (!sessionId) {
+      const newSession: ChatSession = {
+        id: crypto.randomUUID(),
+        title: message.content.slice(0, 50) || 'New Chat',
+        messages: [newMessage],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        mode: message.mode,
+      };
+      updatedSessions = [newSession, ...updatedSessions];
+      sessionId = newSession.id;
+      setCurrentSessionId(sessionId);
+      await storage.saveCurrentSessionId(sessionId);
+    } else {
+      // Update existing session
+      updatedSessions = updatedSessions.map(session => {
+        if (session.id === sessionId) {
+          const updatedMessages = [...session.messages, newMessage];
+          // Update title from first user message
+          const title = session.messages.length === 0 && message.role === 'user' 
+            ? message.content.slice(0, 50) 
+            : session.title;
+          return {
+            ...session,
+            messages: updatedMessages,
+            title,
+            updatedAt: new Date(),
+          };
+        }
+        return session;
+      });
+    }
+
+    setChatSessions(updatedSessions);
+    await storage.saveChatSessions(updatedSessions);
+    
+    return newMessage;
+  }, [chatSessions, currentSessionId]);
+
+  const updateLastMessage = useCallback(async (content: string) => {
+    if (!currentSessionId) return;
+
+    const updatedSessions = chatSessions.map(session => {
+      if (session.id === currentSessionId && session.messages.length > 0) {
+        const messages = [...session.messages];
+        messages[messages.length - 1] = {
+          ...messages[messages.length - 1],
+          content,
+        };
+        return { ...session, messages, updatedAt: new Date() };
+      }
+      return session;
+    });
+
+    setChatSessions(updatedSessions);
+    await storage.saveChatSessions(updatedSessions);
+  }, [chatSessions, currentSessionId]);
 
   // Reminder management
   const addReminder = useCallback(async (reminder: Omit<Reminder, 'id'>) => {
@@ -169,10 +286,7 @@ export function useAppState() {
     const updatedReminders = [...reminders, newReminder];
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
-    
-    // Schedule notification
     await notificationService.scheduleReminder(newReminder);
-    
     return newReminder;
   }, [reminders]);
 
@@ -180,37 +294,26 @@ export function useAppState() {
     const reminder = reminders.find(r => r.id === id);
     if (!reminder) return;
 
-    // Daily reminders can be completed but not deleted
     const updatedReminders = reminders.map(r =>
       r.id === id ? { ...r, completed: !r.completed } : r
     );
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
     
-    // Cancel notification if completed
     if (!reminder.completed) {
       await notificationService.cancelReminder(id);
     } else if (reminder.type === 'daily') {
-      // Reschedule daily reminder for tomorrow if uncompleted
       await notificationService.rescheduleDaily({ ...reminder, completed: false });
     }
   }, [reminders]);
 
   const deleteReminder = useCallback(async (id: string) => {
     const reminder = reminders.find(r => r.id === id);
-    if (!reminder) return;
-
-    // Prevent deletion of daily reminders
-    if (reminder.type === 'daily') {
-      console.warn('Daily reminders cannot be deleted');
-      return;
-    }
+    if (!reminder || reminder.type === 'daily') return;
 
     const updatedReminders = reminders.filter(r => r.id !== id);
     setReminders(updatedReminders);
     await storage.saveReminders(updatedReminders);
-    
-    // Cancel notification
     await notificationService.cancelReminder(id);
   }, [reminders]);
 
@@ -221,7 +324,7 @@ export function useAppState() {
       content,
       timestamp: new Date(),
     };
-    const updatedNotes = [newNote, ...notes]; // Newest first
+    const updatedNotes = [newNote, ...notes];
     setNotes(updatedNotes);
     await storage.saveNotes(updatedNotes);
     return newNote;
@@ -245,11 +348,16 @@ export function useAppState() {
     return newEvent;
   }, [events]);
 
-  // API Config management
+  // Settings management
   const setApiConfig = useCallback(async (config: APIConfig) => {
     await secureStorage.setApiConfig(config);
     setApiConfigState(config);
     await aiRouter.init();
+  }, []);
+
+  const saveAppSettings = useCallback(async (settings: AppSettings) => {
+    setAppSettings(settings);
+    await storage.saveAppSettings(settings);
   }, []);
 
   // Intro management
@@ -264,7 +372,13 @@ export function useAppState() {
     toggleMode,
     messages,
     addMessage,
-    clearMessages,
+    updateLastMessage,
+    chatSessions,
+    currentSessionId,
+    createNewSession,
+    selectSession,
+    deleteSession,
+    clearAllSessions,
     reminders,
     addReminder,
     toggleReminder,
@@ -276,6 +390,8 @@ export function useAppState() {
     deleteNote,
     apiConfig,
     setApiConfig,
+    appSettings,
+    saveAppSettings,
     isLoading,
     hasSeenIntro,
     markIntroSeen,

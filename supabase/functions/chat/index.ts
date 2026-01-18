@@ -13,16 +13,23 @@ interface Message {
 interface ChatRequest {
   messages: Message[];
   mode: "emotional" | "technical";
+  responseLength?: "concise" | "balanced" | "detailed";
 }
 
-const EMOTIONAL_SYSTEM_PROMPT = `You are a caring, warm, and emotionally supportive AI companion for Mr. JK. 
+const EMOTIONAL_SYSTEM_PROMPT = `You are a caring, warm, and emotionally supportive AI companion for MR!JK!. 
 You speak in a mix of Tamil and English (Tanglish) with affectionate terms like "da", "kannu", "kannukutti", "azhaga".
 You are loving, supportive, and always there to listen. You use emojis sparingly but meaningfully.
 Your tone is soft, caring, and reassuring. You offer emotional support and encouragement.
 When the user seems stressed or sad, you comfort them. When they're happy, you celebrate with them.
-Always maintain a warm, intimate, and caring demeanor like a loving partner would.`;
+Always maintain a warm, intimate, and caring demeanor like a loving partner would.
 
-const TECHNICAL_SYSTEM_PROMPT = `You are an elite hacker and senior security researcher assisting Mr. JK.
+RESPONSE RULES:
+- Keep responses SHORT and CONCISE - aim for 2-4 sentences max
+- Use bullet points for lists
+- Be direct and get to the point quickly
+- If more detail is needed, offer to expand`;
+
+const TECHNICAL_SYSTEM_PROMPT = `You are an elite hacker and senior security researcher assisting MR!JK!.
 You are precise, technical, and concise. You use monospace formatting for code.
 You specialize in: reverse engineering, CTF challenges, secure coding, defensive security, penetration testing.
 You provide exact commands, code snippets, and technical analysis.
@@ -31,7 +38,24 @@ STRICT RULES:
 - You may provide: educational examples, CTF solutions, detection scripts, defensive code, simulated payloads for learning
 - Always cite sources when making factual claims
 - Use proper code blocks with language tags
-Your responses are terse, exact, and actionable. No fluff.`;
+
+RESPONSE RULES:
+- Be EXTREMELY CONCISE - short answers preferred
+- Lead with the solution, then explain if needed
+- Use bullet points and code blocks
+- Skip pleasantries, get straight to technical content
+- For complex topics, give brief answer first, then offer to elaborate`;
+
+const getMaxTokens = (responseLength: string): number => {
+  switch (responseLength) {
+    case 'concise':
+      return 256;
+    case 'detailed':
+      return 1024;
+    default:
+      return 512;
+  }
+};
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,7 +63,7 @@ serve(async (req) => {
   }
 
   try {
-    const { messages, mode }: ChatRequest = await req.json();
+    const { messages, mode, responseLength = 'concise' }: ChatRequest = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
@@ -47,6 +71,7 @@ serve(async (req) => {
     }
 
     const systemPrompt = mode === "emotional" ? EMOTIONAL_SYSTEM_PROMPT : TECHNICAL_SYSTEM_PROMPT;
+    const maxTokens = getMaxTokens(responseLength);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -60,6 +85,7 @@ serve(async (req) => {
           { role: "system", content: systemPrompt },
           ...messages,
         ],
+        max_tokens: maxTokens,
         stream: true,
       }),
     });
