@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Paperclip, Mic, MicOff, X, Image, FileText, Film, Volume2, VolumeX } from 'lucide-react';
-import { Message, AIMode, Attachment } from '@/types';
+import { Send, Paperclip, Mic, MicOff, X, Image, FileText, Film, Volume2, VolumeX, Plus } from 'lucide-react';
+import { Message, AIMode, Attachment, VoiceSettings } from '@/types';
 import { ModeIndicator } from './ModeSwitcher';
 import { voiceService } from '@/services/voice';
 import { toast } from 'sonner';
@@ -10,18 +10,21 @@ interface ChatInterfaceProps {
   mode: AIMode;
   messages: Message[];
   onSendMessage: (content: string, attachments?: Attachment[]) => Promise<void>;
+  voiceSettings?: VoiceSettings;
+  onNewChat?: () => void;
 }
 
-export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfaceProps) {
+export function ChatInterface({ mode, messages, onSendMessage, voiceSettings, onNewChat }: ChatInterfaceProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [autoSpeak, setAutoSpeak] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastAssistantMessageRef = useRef<string>('');
+
+  const autoSpeak = voiceSettings?.autoSpeak ?? true;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -33,27 +36,26 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
 
   // Auto-speak new assistant messages
   useEffect(() => {
-    if (!autoSpeak || messages.length === 0) return;
+    if (!autoSpeak || !voiceSettings?.enabled || messages.length === 0) return;
     
     const lastMessage = messages[messages.length - 1];
     if (
       lastMessage.role === 'assistant' && 
       lastMessage.content !== lastAssistantMessageRef.current &&
       lastMessage.content.length > 0 &&
-      lastMessage.content.length < 500 // Don't speak very long messages
+      lastMessage.content.length < 500
     ) {
       lastAssistantMessageRef.current = lastMessage.content;
       handleSpeak(lastMessage.content);
     }
-  }, [messages, autoSpeak, mode]);
+  }, [messages, autoSpeak, mode, voiceSettings?.enabled]);
 
   const handleSpeak = async (text: string) => {
     try {
       setIsSpeaking(true);
-      await voiceService.speak(text, mode);
+      await voiceService.speak(text, mode, voiceSettings);
     } catch (error) {
       console.error('TTS error:', error);
-      toast.error('Voice playback failed');
     } finally {
       setIsSpeaking(false);
     }
@@ -129,11 +131,6 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
     }
   }, [isListening]);
 
-  const toggleAutoSpeak = () => {
-    setAutoSpeak(!autoSpeak);
-    toast.info(autoSpeak ? 'Auto-speak disabled' : 'Auto-speak enabled');
-  };
-
   const getAttachmentIcon = (type: Attachment['type']) => {
     switch (type) {
       case 'image': return <Image className="w-4 h-4" />;
@@ -168,9 +165,15 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 ? "I'm here whenever you need to talk, da. What's on your mind?"
                 : "System initialized. Awaiting your commands. Let's hack the planet."}
             </p>
-            <p className="text-xs text-muted-foreground mt-4 font-mono">
-              {isEmotional ? '🎤 Voice enabled • Real AI powered' : '[ AI • VOICE • READY ]'}
-            </p>
+            {onNewChat && (
+              <button
+                onClick={onNewChat}
+                className="mt-4 flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg transition-colors text-sm font-mono"
+              >
+                <Plus className="w-4 h-4" />
+                NEW CHAT
+              </button>
+            )}
           </motion.div>
         )}
 
@@ -181,7 +184,7 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              transition={{ delay: index * 0.05 }}
+              transition={{ delay: index * 0.02 }}
               className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               <div
@@ -196,17 +199,18 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 {message.role === 'assistant' && (
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <ModeIndicator mode={message.mode} />
-                    <button
-                      onClick={() => handleSpeak(message.content)}
-                      className="p-1 hover:bg-background/50 rounded transition-colors"
-                      title="Speak this message"
-                    >
-                      <Volume2 className="w-3 h-3 text-muted-foreground" />
-                    </button>
+                    {voiceSettings?.enabled && (
+                      <button
+                        onClick={() => handleSpeak(message.content)}
+                        className="p-1 hover:bg-background/50 rounded transition-colors"
+                        title="Speak this message"
+                      >
+                        <Volume2 className="w-3 h-3 text-muted-foreground" />
+                      </button>
+                    )}
                   </div>
                 )}
                 
-                {/* Attachments */}
                 {message.attachments && message.attachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
                     {message.attachments.map(att => (
@@ -219,7 +223,7 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 )}
                 
                 <p className={`whitespace-pre-wrap ${message.mode === 'technical' ? 'font-mono text-sm' : ''}`}>
-                  {message.content}
+                  {message.content || '...'}
                 </p>
                 
                 <p className="text-xs text-muted-foreground mt-2">
@@ -231,11 +235,7 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
         </AnimatePresence>
 
         {isLoading && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex justify-start"
-          >
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex justify-start">
             <div className="bg-muted rounded-2xl px-4 py-3 border border-border">
               <div className="flex items-center gap-2">
                 <motion.span
@@ -245,16 +245,6 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
                 >
                   {isEmotional ? 'Thinking...' : 'Processing...'}
                 </motion.span>
-                <div className="flex gap-1">
-                  {[0, 1, 2].map(i => (
-                    <motion.div
-                      key={i}
-                      className={`w-2 h-2 rounded-full ${isEmotional ? 'bg-secondary' : 'bg-primary'}`}
-                      animate={{ scale: [1, 1.2, 1] }}
-                      transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.2 }}
-                    />
-                  ))}
-                </div>
               </div>
             </div>
           </motion.div>
@@ -263,118 +253,20 @@ export function ChatInterface({ mode, messages, onSendMessage }: ChatInterfacePr
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Attachments preview */}
-      <AnimatePresence>
-        {attachments.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="px-4 py-2 border-t border-border"
-          >
-            <div className="flex flex-wrap gap-2">
-              {attachments.map(att => (
-                <div key={att.id} className="relative group">
-                  {att.type === 'image' ? (
-                    <img src={att.url} alt={att.name} className="w-16 h-16 object-cover rounded-lg" />
-                  ) : (
-                    <div className="w-16 h-16 bg-muted rounded-lg flex flex-col items-center justify-center">
-                      {getAttachmentIcon(att.type)}
-                      <span className="text-xs text-muted-foreground mt-1 truncate w-14 text-center">
-                        {att.name.split('.').pop()}
-                      </span>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => removeAttachment(att.id)}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-destructive rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <X className="w-3 h-3 text-destructive-foreground" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Input area */}
       <div className="p-4 border-t border-border">
         <div className="flex items-end gap-2">
-          {/* File upload */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            accept="image/*,video/*,application/pdf"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
-          <motion.button
-            onClick={() => fileInputRef.current?.click()}
-            className="p-3 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
+          <input ref={fileInputRef} type="file" multiple accept="image/*,video/*,application/pdf" onChange={handleFileSelect} className="hidden" />
+          <motion.button onClick={() => fileInputRef.current?.click()} className="p-3 rounded-xl bg-muted hover:bg-muted/80 text-muted-foreground transition-colors" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Paperclip className="w-5 h-5" />
           </motion.button>
-
-          {/* Auto-speak toggle */}
-          <motion.button
-            onClick={toggleAutoSpeak}
-            className={`p-3 rounded-xl transition-colors ${
-              autoSpeak 
-                ? 'bg-primary/20 text-primary' 
-                : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-            }`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            title={autoSpeak ? 'Disable auto-speak' : 'Enable auto-speak'}
-          >
-            {autoSpeak ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-          </motion.button>
-
-          {/* Voice input */}
-          <motion.button
-            onClick={toggleListening}
-            className={`p-3 rounded-xl transition-colors ${
-              isListening 
-                ? 'bg-destructive text-destructive-foreground animate-pulse' 
-                : 'bg-muted hover:bg-muted/80 text-muted-foreground'
-            }`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
+          <motion.button onClick={toggleListening} className={`p-3 rounded-xl transition-colors ${isListening ? 'bg-destructive text-destructive-foreground animate-pulse' : 'bg-muted hover:bg-muted/80 text-muted-foreground'}`} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
           </motion.button>
-
-          {/* Text input */}
           <div className="flex-1 relative">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyPress}
-              placeholder={isEmotional ? "Tell me what's on your mind..." : "Enter command..."}
-              rows={1}
-              className={`w-full px-4 py-3 bg-muted border border-border rounded-xl resize-none focus:outline-none focus:ring-2 transition-all ${
-                isEmotional ? 'focus:ring-secondary/50' : 'focus:ring-primary/50'
-              } ${mode === 'technical' ? 'font-mono' : ''}`}
-              style={{ minHeight: '48px', maxHeight: '120px' }}
-            />
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKeyPress} placeholder={isEmotional ? "Tell me what's on your mind..." : "Enter command..."} rows={1} className={`w-full px-4 py-3 bg-muted border border-border rounded-xl resize-none focus:outline-none focus:ring-2 transition-all ${isEmotional ? 'focus:ring-secondary/50' : 'focus:ring-primary/50'} ${mode === 'technical' ? 'font-mono' : ''}`} style={{ minHeight: '48px', maxHeight: '120px' }} />
           </div>
-
-          {/* Send button */}
-          <motion.button
-            onClick={handleSend}
-            disabled={isLoading || (!input.trim() && attachments.length === 0)}
-            className={`p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-              isEmotional 
-                ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90' 
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            }`}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
+          <motion.button onClick={handleSend} disabled={isLoading || (!input.trim() && attachments.length === 0)} className={`p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isEmotional ? 'bg-secondary text-secondary-foreground hover:bg-secondary/90' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`} whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
             <Send className="w-5 h-5" />
           </motion.button>
         </div>

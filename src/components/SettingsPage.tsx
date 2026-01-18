@@ -1,56 +1,131 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Eye, EyeOff, Check, X, Key, Shield, Save, Trash2 } from 'lucide-react';
-import { APIConfig } from '@/types';
-import { aiRouter } from '@/services/ai-router';
+import { 
+  X, Shield, Save, Trash2, Volume2, VolumeX, Bell, BellOff, 
+  Check, AlertTriangle, MessageSquare, Gauge, TestTube, Play
+} from 'lucide-react';
+import { APIConfig, AppSettings, ResponseLength } from '@/types';
+import { notificationService } from '@/services/notifications';
+import { toast } from 'sonner';
 
 interface SettingsPageProps {
   apiConfig: APIConfig | null;
-  onSave: (config: APIConfig) => Promise<void>;
+  appSettings: AppSettings;
+  onSaveApiConfig: (config: APIConfig) => Promise<void>;
+  onSaveAppSettings: (settings: AppSettings) => Promise<void>;
+  onClearChatHistory: () => void;
   onClose: () => void;
 }
 
-export function SettingsPage({ apiConfig, onSave, onClose }: SettingsPageProps) {
-  const [emotionalKey, setEmotionalKey] = useState(apiConfig?.emotionalApiKey || '');
-  const [technicalKey, setTechnicalKey] = useState(apiConfig?.technicalApiKey || '');
-  const [showEmotional, setShowEmotional] = useState(false);
-  const [showTechnical, setShowTechnical] = useState(false);
-  const [emotionalValid, setEmotionalValid] = useState<boolean | null>(null);
-  const [technicalValid, setTechnicalValid] = useState<boolean | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
+export function SettingsPage({ 
+  apiConfig, 
+  appSettings,
+  onSaveApiConfig,
+  onSaveAppSettings,
+  onClearChatHistory,
+  onClose 
+}: SettingsPageProps) {
+  const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings);
+  const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'default'>('default');
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  const validateEmotionalKey = async () => {
-    setIsValidating(true);
-    const valid = await aiRouter.validateApiKey();
-    setEmotionalValid(valid);
-    setIsValidating(false);
+  useEffect(() => {
+    // Check notification permission
+    if ('Notification' in window) {
+      setNotificationStatus(Notification.permission as 'granted' | 'denied' | 'default');
+    }
+  }, []);
+
+  const handleVoiceToggle = () => {
+    setLocalSettings(prev => ({
+      ...prev,
+      voiceSettings: {
+        ...prev.voiceSettings,
+        enabled: !prev.voiceSettings.enabled,
+      },
+    }));
   };
 
-  const validateTechnicalKey = async () => {
-    setIsValidating(true);
-    const valid = await aiRouter.validateApiKey();
-    setTechnicalValid(valid);
-    setIsValidating(false);
+  const handleAutoSpeakToggle = () => {
+    setLocalSettings(prev => ({
+      ...prev,
+      voiceSettings: {
+        ...prev.voiceSettings,
+        autoSpeak: !prev.voiceSettings.autoSpeak,
+      },
+    }));
+  };
+
+  const handleVolumeChange = (volume: number) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      voiceSettings: {
+        ...prev.voiceSettings,
+        volume,
+      },
+    }));
+  };
+
+  const handleSpeedChange = (speed: 'slow' | 'normal' | 'fast') => {
+    setLocalSettings(prev => ({
+      ...prev,
+      voiceSettings: {
+        ...prev.voiceSettings,
+        speed,
+      },
+    }));
+  };
+
+  const handleResponseLengthChange = (responseLength: ResponseLength) => {
+    setLocalSettings(prev => ({
+      ...prev,
+      responseLength,
+    }));
+  };
+
+  const handleRequestNotificationPermission = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationStatus(granted ? 'granted' : 'denied');
+    if (granted) {
+      toast.success('Notifications enabled!');
+    } else {
+      toast.error('Notification permission denied');
+    }
+  };
+
+  const handleTestNotification = async () => {
+    if (notificationStatus !== 'granted') {
+      toast.error('Please enable notifications first');
+      return;
+    }
+
+    if ('Notification' in window) {
+      new Notification('🔔 Test Notification', {
+        body: 'MR!JK! notifications are working!',
+        icon: '/icons/icon-192x192.png',
+      });
+      toast.success('Test notification sent!');
+    }
   };
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onSave({
-        emotionalApiKey: emotionalKey,
-        technicalApiKey: technicalKey,
-      });
+      await onSaveAppSettings(localSettings);
+      toast.success('Settings saved!');
+      onClose();
+    } catch (error) {
+      toast.error('Failed to save settings');
     } finally {
       setIsSaving(false);
     }
   };
 
-  const clearKeys = () => {
-    setEmotionalKey('');
-    setTechnicalKey('');
-    setEmotionalValid(null);
-    setTechnicalValid(null);
+  const handleClearHistory = () => {
+    onClearChatHistory();
+    setShowClearConfirm(false);
+    toast.success('Chat history cleared!');
   };
 
   return (
@@ -58,157 +133,275 @@ export function SettingsPage({ apiConfig, onSave, onClose }: SettingsPageProps) 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-background/95 backdrop-blur-sm z-50 overflow-y-auto"
     >
-      <motion.div
-        initial={{ scale: 0.95, y: 20 }}
-        animate={{ scale: 1, y: 0 }}
-        className="w-full max-w-lg glass rounded-2xl p-6"
-      >
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-              <Shield className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">API Settings</h2>
-              <p className="text-sm text-muted-foreground">Securely stored on device</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-muted rounded-lg transition-colors"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Emotional Mode API Key */}
-          <div>
-            <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-secondary" />
-              Emotional Mode API Key
-            </label>
-            <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type={showEmotional ? 'text' : 'password'}
-                value={emotionalKey}
-                onChange={(e) => {
-                  setEmotionalKey(e.target.value);
-                  setEmotionalValid(null);
-                }}
-                placeholder="sk-..."
-                className="w-full pl-10 pr-24 py-3 bg-muted border border-border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-secondary/50"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  onClick={() => setShowEmotional(!showEmotional)}
-                  className="p-1.5 hover:bg-background/50 rounded"
-                >
-                  {showEmotional ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={validateEmotionalKey}
-                  disabled={!emotionalKey || isValidating}
-                  className="px-2 py-1 text-xs bg-secondary/20 hover:bg-secondary/30 rounded text-secondary disabled:opacity-50"
-                >
-                  Test
-                </button>
+      <div className="min-h-screen p-4 flex items-start justify-center pt-8">
+        <motion.div
+          initial={{ scale: 0.95, y: 20 }}
+          animate={{ scale: 1, y: 0 }}
+          className="w-full max-w-lg glass rounded-2xl p-6 space-y-6"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
+                <Shield className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h2 className="text-xl font-bold font-mono">// SETTINGS</h2>
+                <p className="text-sm text-muted-foreground">MR!JK! Configuration</p>
               </div>
             </div>
-            {emotionalValid !== null && (
-              <motion.p
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`text-xs mt-2 flex items-center gap-1 ${
-                  emotionalValid ? 'text-neon-green' : 'text-destructive'
-                }`}
-              >
-                {emotionalValid ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                {emotionalValid ? 'Key validated successfully' : 'Invalid key format'}
-              </motion.p>
-            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-muted rounded-lg transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
-          {/* Technical Mode API Key */}
-          <div>
-            <label className="block text-sm font-medium mb-2 flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-primary" />
-              Technical Mode API Key
-            </label>
-            <div className="relative">
-              <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type={showTechnical ? 'text' : 'password'}
-                value={technicalKey}
-                onChange={(e) => {
-                  setTechnicalKey(e.target.value);
-                  setTechnicalValid(null);
-                }}
-                placeholder="sk-..."
-                className="w-full pl-10 pr-24 py-3 bg-muted border border-border rounded-lg font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <button
-                  onClick={() => setShowTechnical(!showTechnical)}
-                  className="p-1.5 hover:bg-background/50 rounded"
-                >
-                  {showTechnical ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-                <button
-                  onClick={validateTechnicalKey}
-                  disabled={!technicalKey || isValidating}
-                  className="px-2 py-1 text-xs bg-primary/20 hover:bg-primary/30 rounded text-primary disabled:opacity-50"
-                >
-                  Test
-                </button>
+          {/* API Status */}
+          <div className="p-4 bg-muted/50 rounded-xl border border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+                <span className="font-mono text-sm">AI Status</span>
+              </div>
+              <div className="flex items-center gap-1 text-primary text-sm">
+                <Check className="w-4 h-4" />
+                Connected
               </div>
             </div>
-            {technicalValid !== null && (
-              <motion.p
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className={`text-xs mt-2 flex items-center gap-1 ${
-                  technicalValid ? 'text-neon-green' : 'text-destructive'
-                }`}
-              >
-                {technicalValid ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
-                {technicalValid ? 'Key validated successfully' : 'Invalid key format'}
-              </motion.p>
-            )}
-          </div>
-
-          {/* Security notice */}
-          <div className="p-3 bg-muted/50 rounded-lg border border-border">
-            <p className="text-xs text-muted-foreground">
-              <Shield className="w-3 h-3 inline mr-1" />
-              Keys are stored securely on your device and never transmitted to our servers.
-              In production, use platform-specific secure storage (Keychain/Keystore).
+            <p className="text-xs text-muted-foreground mt-2">
+              Using Lovable AI Gateway (no API key required)
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-3">
+          {/* Voice Assistant Settings */}
+          <div className="space-y-4">
+            <h3 className="font-mono font-medium flex items-center gap-2">
+              <Volume2 className="w-4 h-4 text-primary" />
+              Voice Assistant
+            </h3>
+            
+            <div className="space-y-3 p-4 bg-muted/30 rounded-xl border border-border">
+              {/* Voice On/Off */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Voice Output</span>
+                <button
+                  onClick={handleVoiceToggle}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${
+                    localSettings.voiceSettings.enabled ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <motion.div
+                    className="absolute top-1 w-4 h-4 rounded-full bg-background shadow"
+                    animate={{ left: localSettings.voiceSettings.enabled ? '26px' : '4px' }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                </button>
+              </div>
+
+              {/* Auto-Speak Toggle */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Auto-speak responses</span>
+                <button
+                  onClick={handleAutoSpeakToggle}
+                  className={`w-12 h-6 rounded-full transition-colors relative ${
+                    localSettings.voiceSettings.autoSpeak ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <motion.div
+                    className="absolute top-1 w-4 h-4 rounded-full bg-background shadow"
+                    animate={{ left: localSettings.voiceSettings.autoSpeak ? '26px' : '4px' }}
+                    transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                  />
+                </button>
+              </div>
+
+              {/* Volume Slider */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm">Volume</span>
+                  <span className="text-xs text-muted-foreground font-mono">
+                    {Math.round(localSettings.voiceSettings.volume * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  value={localSettings.voiceSettings.volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+                />
+              </div>
+
+              {/* Speed Selection */}
+              <div className="space-y-2">
+                <span className="text-sm">Speed</span>
+                <div className="flex gap-2">
+                  {(['slow', 'normal', 'fast'] as const).map((speed) => (
+                    <button
+                      key={speed}
+                      onClick={() => handleSpeedChange(speed)}
+                      className={`flex-1 py-2 text-xs font-mono rounded-lg transition-colors ${
+                        localSettings.voiceSettings.speed === speed
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted hover:bg-muted/80'
+                      }`}
+                    >
+                      {speed.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Response Length Settings */}
+          <div className="space-y-4">
+            <h3 className="font-mono font-medium flex items-center gap-2">
+              <Gauge className="w-4 h-4 text-primary" />
+              Response Length
+            </h3>
+            
+            <div className="flex gap-2">
+              {(['concise', 'balanced', 'detailed'] as ResponseLength[]).map((length) => (
+                <button
+                  key={length}
+                  onClick={() => handleResponseLengthChange(length)}
+                  className={`flex-1 py-3 text-xs font-mono rounded-lg transition-colors ${
+                    localSettings.responseLength === length
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted hover:bg-muted/80'
+                  }`}
+                >
+                  {length.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {localSettings.responseLength === 'concise' && 'Short, direct answers'}
+              {localSettings.responseLength === 'balanced' && 'Moderate detail'}
+              {localSettings.responseLength === 'detailed' && 'Comprehensive responses'}
+            </p>
+          </div>
+
+          {/* Notification Settings */}
+          <div className="space-y-4">
+            <h3 className="font-mono font-medium flex items-center gap-2">
+              <Bell className="w-4 h-4 text-primary" />
+              Notifications
+            </h3>
+            
+            <div className="p-4 bg-muted/30 rounded-xl border border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {notificationStatus === 'granted' ? (
+                    <Bell className="w-4 h-4 text-primary" />
+                  ) : (
+                    <BellOff className="w-4 h-4 text-muted-foreground" />
+                  )}
+                  <span className="text-sm">Permission Status</span>
+                </div>
+                <span className={`text-xs font-mono px-2 py-1 rounded ${
+                  notificationStatus === 'granted' 
+                    ? 'bg-primary/20 text-primary' 
+                    : 'bg-destructive/20 text-destructive'
+                }`}>
+                  {notificationStatus.toUpperCase()}
+                </span>
+              </div>
+
+              {notificationStatus !== 'granted' && (
+                <button
+                  onClick={handleRequestNotificationPermission}
+                  className="w-full py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm transition-colors"
+                >
+                  Enable Notifications
+                </button>
+              )}
+
+              {notificationStatus === 'granted' && (
+                <button
+                  onClick={handleTestNotification}
+                  className="w-full py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <TestTube className="w-4 h-4" />
+                  Test Notification
+                </button>
+              )}
+
+              {notificationStatus === 'denied' && (
+                <div className="flex items-start gap-2 text-xs text-muted-foreground">
+                  <AlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                  <p>Permission denied. Please enable notifications in your browser/device settings.</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Chat Controls */}
+          <div className="space-y-4">
+            <h3 className="font-mono font-medium flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              Chat Controls
+            </h3>
+            
+            {showClearConfirm ? (
+              <div className="p-4 bg-destructive/10 rounded-xl border border-destructive/30 space-y-3">
+                <div className="flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span className="text-sm font-medium">Delete all chat history?</span>
+                </div>
+                <p className="text-xs text-muted-foreground">This action cannot be undone.</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="flex-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleClearHistory}
+                    className="flex-1 py-2 bg-destructive hover:bg-destructive/90 text-destructive-foreground rounded-lg text-sm transition-colors"
+                  >
+                    Delete All
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="w-full py-3 bg-muted hover:bg-muted/80 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <Trash2 className="w-4 h-4" />
+                Clear Chat History
+              </button>
+            )}
+          </div>
+
+          {/* Save Button */}
+          <div className="flex gap-3 pt-4 border-t border-border">
             <button
-              onClick={clearKeys}
-              className="flex-1 py-3 px-4 bg-muted hover:bg-muted/80 rounded-lg font-medium flex items-center justify-center gap-2 transition-colors"
+              onClick={onClose}
+              className="flex-1 py-3 bg-muted hover:bg-muted/80 rounded-lg font-medium transition-colors"
             >
-              <Trash2 className="w-4 h-4" />
-              Clear
+              Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={isSaving}
-              className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              className="flex-1 py-3 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
             >
               <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save'}
             </button>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      </div>
     </motion.div>
   );
 }

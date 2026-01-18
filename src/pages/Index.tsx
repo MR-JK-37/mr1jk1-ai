@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Plus, Bell } from 'lucide-react';
+import { Plus, Bell, History } from 'lucide-react';
 import { IntroScreen } from '@/components/IntroScreen';
 import { HackerClock } from '@/components/HackerClock';
 import { MiniCalendar } from '@/components/MiniCalendar';
@@ -12,10 +12,11 @@ import { SettingsPage } from '@/components/SettingsPage';
 import { AddReminderModal } from '@/components/AddReminderModal';
 import { NotesPage } from '@/components/NotesPage';
 import { CTFEventsWidget } from '@/components/CTFEventsWidget';
+import { ChatHistorySidebar } from '@/components/ChatHistorySidebar';
 import { useAppState } from '@/hooks/useAppState';
 import { aiRouter } from '@/services/ai-router';
 import { notificationService } from '@/services/notifications';
-import { Message, Attachment } from '@/types';
+import { Attachment } from '@/types';
 import { toast } from 'sonner';
 
 type Tab = 'home' | 'chat' | 'calendar' | 'notes' | 'settings';
@@ -23,10 +24,16 @@ type Tab = 'home' | 'chat' | 'calendar' | 'notes' | 'settings';
 const Index = () => {
   const {
     mode,
-    setMode,
     toggleMode,
     messages,
     addMessage,
+    updateLastMessage,
+    chatSessions,
+    currentSessionId,
+    createNewSession,
+    selectSession,
+    deleteSession,
+    clearAllSessions,
     reminders,
     addReminder,
     toggleReminder,
@@ -37,6 +44,8 @@ const Index = () => {
     deleteNote,
     apiConfig,
     setApiConfig,
+    appSettings,
+    saveAppSettings,
     isLoading,
     hasSeenIntro,
     markIntroSeen,
@@ -45,6 +54,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState<Tab>('home');
   const [showAddReminder, setShowAddReminder] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showChatHistory, setShowChatHistory] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState(false);
 
   useEffect(() => {
@@ -71,36 +81,30 @@ const Index = () => {
       attachments,
     });
 
-    // Get AI response using streaming
-    let assistantContent = '';
-    
-    // Create a placeholder message
+    // Create placeholder for assistant message
     await addMessage({
       role: 'assistant',
       content: '',
       mode,
     });
 
+    // Stream AI response
+    let assistantContent = '';
+    
     try {
       await aiRouter.streamResponse(
         content,
         messages,
         (chunk) => {
           assistantContent += chunk;
-        }
+          updateLastMessage(assistantContent);
+        },
+        appSettings.responseLength
       );
-
-      // Update the placeholder with final content
-      if (assistantContent) {
-        await addMessage({
-          role: 'assistant',
-          content: assistantContent,
-          mode,
-        });
-      }
     } catch (error) {
       console.error('Failed to get AI response:', error);
       toast.error('Failed to get AI response');
+      updateLastMessage('Sorry, I encountered an error. Please try again.');
     }
   };
 
@@ -112,6 +116,10 @@ const Index = () => {
     } else {
       toast.error('Notification permission denied');
     }
+  };
+
+  const handleNewChat = async () => {
+    await createNewSession();
   };
 
   if (isLoading) {
@@ -141,6 +149,15 @@ const Index = () => {
             <div className="flex items-center justify-between px-4 h-14 max-w-lg mx-auto">
               <div className="flex items-center gap-2">
                 <ModeIndicator mode={mode} />
+                {activeTab === 'chat' && (
+                  <button
+                    onClick={() => setShowChatHistory(true)}
+                    className="p-1.5 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+                    title="Chat history"
+                  >
+                    <History className="w-4 h-4 text-muted-foreground" />
+                  </button>
+                )}
                 {!notificationPermission && (
                   <button
                     onClick={handleRequestNotificationPermission}
@@ -224,6 +241,8 @@ const Index = () => {
                     mode={mode}
                     messages={messages}
                     onSendMessage={handleSendMessage}
+                    voiceSettings={appSettings.voiceSettings}
+                    onNewChat={handleNewChat}
                   />
                 </motion.div>
               )}
@@ -271,6 +290,18 @@ const Index = () => {
           {/* Navigation */}
           <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
+          {/* Chat History Sidebar */}
+          <ChatHistorySidebar
+            sessions={chatSessions}
+            currentSessionId={currentSessionId}
+            isOpen={showChatHistory}
+            onClose={() => setShowChatHistory(false)}
+            onSelectSession={selectSession}
+            onNewChat={handleNewChat}
+            onDeleteSession={deleteSession}
+            onClearAll={clearAllSessions}
+          />
+
           {/* Modals */}
           <AnimatePresence>
             {showAddReminder && (
@@ -283,11 +314,10 @@ const Index = () => {
             {showSettings && (
               <SettingsPage
                 apiConfig={apiConfig}
-                onSave={async (config) => {
-                  await setApiConfig(config);
-                  setShowSettings(false);
-                  setActiveTab('home');
-                }}
+                appSettings={appSettings}
+                onSaveApiConfig={setApiConfig}
+                onSaveAppSettings={saveAppSettings}
+                onClearChatHistory={clearAllSessions}
                 onClose={() => {
                   setShowSettings(false);
                   setActiveTab('home');

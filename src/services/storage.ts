@@ -1,22 +1,35 @@
 // Secure storage service - uses localStorage for demo, replace with Capacitor SecureStorage in production
-import { APIConfig, Message, Reminder, CalendarEvent, AIMode, Note } from '@/types';
+import { APIConfig, Message, Reminder, CalendarEvent, AIMode, Note, ChatSession, AppSettings, VoiceSettings, ResponseLength } from '@/types';
 
 const STORAGE_KEYS = {
   API_CONFIG: 'jk_assistant_api_config',
   MESSAGES: 'jk_assistant_messages',
+  CHAT_SESSIONS: 'jk_assistant_chat_sessions',
+  CURRENT_SESSION: 'jk_assistant_current_session',
   REMINDERS: 'jk_assistant_reminders',
   EVENTS: 'jk_assistant_events',
   NOTES: 'jk_assistant_notes',
   MODE: 'jk_assistant_mode',
   INTRO_SEEN: 'jk_assistant_intro_seen',
   LAST_DAILY_RESET: 'jk_assistant_last_daily_reset',
+  APP_SETTINGS: 'jk_assistant_app_settings',
+};
+
+const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
+  enabled: true,
+  volume: 0.8,
+  speed: 'normal',
+  autoSpeak: true,
+};
+
+const DEFAULT_APP_SETTINGS: AppSettings = {
+  voiceSettings: DEFAULT_VOICE_SETTINGS,
+  responseLength: 'concise',
 };
 
 // In production, replace with Capacitor SecureStorage or platform keystore
 export const secureStorage = {
   async setApiConfig(config: APIConfig): Promise<void> {
-    // WARNING: In production, use Capacitor SecureStorage
-    // @capacitor/secure-storage-plugin for Android/iOS
     localStorage.setItem(STORAGE_KEYS.API_CONFIG, JSON.stringify(config));
   },
 
@@ -31,7 +44,38 @@ export const secureStorage = {
 };
 
 export const storage = {
-  // Messages
+  // Chat Sessions
+  async saveChatSessions(sessions: ChatSession[]): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.CHAT_SESSIONS, JSON.stringify(sessions));
+  },
+
+  async getChatSessions(): Promise<ChatSession[]> {
+    const data = localStorage.getItem(STORAGE_KEYS.CHAT_SESSIONS);
+    if (!data) return [];
+    return JSON.parse(data).map((s: ChatSession) => ({
+      ...s,
+      createdAt: new Date(s.createdAt),
+      updatedAt: new Date(s.updatedAt),
+      messages: s.messages.map((m: Message) => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      })),
+    }));
+  },
+
+  async saveCurrentSessionId(sessionId: string | null): Promise<void> {
+    if (sessionId) {
+      localStorage.setItem(STORAGE_KEYS.CURRENT_SESSION, sessionId);
+    } else {
+      localStorage.removeItem(STORAGE_KEYS.CURRENT_SESSION);
+    }
+  },
+
+  async getCurrentSessionId(): Promise<string | null> {
+    return localStorage.getItem(STORAGE_KEYS.CURRENT_SESSION);
+  },
+
+  // Messages (legacy - for migration)
   async saveMessages(messages: Message[]): Promise<void> {
     localStorage.setItem(STORAGE_KEYS.MESSAGES, JSON.stringify(messages));
   },
@@ -45,6 +89,21 @@ export const storage = {
     }));
   },
 
+  async clearMessages(): Promise<void> {
+    localStorage.removeItem(STORAGE_KEYS.MESSAGES);
+  },
+
+  // App Settings
+  async saveAppSettings(settings: AppSettings): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.APP_SETTINGS, JSON.stringify(settings));
+  },
+
+  async getAppSettings(): Promise<AppSettings> {
+    const data = localStorage.getItem(STORAGE_KEYS.APP_SETTINGS);
+    if (!data) return DEFAULT_APP_SETTINGS;
+    return { ...DEFAULT_APP_SETTINGS, ...JSON.parse(data) };
+  },
+
   // Reminders
   async saveReminders(reminders: Reminder[]): Promise<void> {
     localStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(reminders));
@@ -56,7 +115,7 @@ export const storage = {
     return JSON.parse(data).map((r: Reminder) => ({
       ...r,
       datetime: new Date(r.datetime),
-      type: r.type || 'event', // Default to event for backward compatibility
+      type: r.type || 'event',
     }));
   },
 
