@@ -72,15 +72,15 @@ export function useAppState() {
     const loadState = async () => {
       try {
         const [
-          savedMode, 
-          savedSessions, 
+          savedMode,
+          savedSessions,
           savedSessionId,
-          savedReminders, 
-          savedEvents, 
-          savedNotes, 
-          savedConfig, 
+          savedReminders,
+          savedEvents,
+          savedNotes,
+          savedConfig,
           savedSettings,
-          introSeen
+          introSeen,
         ] = await Promise.all([
           storage.getMode(),
           storage.getChatSessions(),
@@ -96,20 +96,38 @@ export function useAppState() {
         setModeState(savedMode);
         setChatSessions(savedSessions);
         setCurrentSessionId(savedSessionId);
-        setReminders(savedReminders);
         setEvents(savedEvents);
         setNotes(savedNotes);
         setApiConfigState(savedConfig);
         setAppSettings(savedSettings);
         setHasSeenIntro(introSeen);
-        
+
         aiRouter.setMode(savedMode);
         await aiRouter.init();
 
+        // Notifications (native when available)
+        await notificationService.init();
         await notificationService.requestPermission();
-        await checkDailyReset(savedReminders);
 
-        for (const reminder of savedReminders.filter(r => !r.completed)) {
+        // Remove expired one-time event reminders (e.g., after they already fired while app was closed)
+        const now = new Date();
+        const cleanedReminders = savedReminders.filter(r => {
+          if (r.type === 'event' && new Date(r.datetime) < now) {
+            notificationService.cancelReminder(r.id);
+            return false;
+          }
+          return true;
+        });
+
+        setReminders(cleanedReminders);
+        if (cleanedReminders.length !== savedReminders.length) {
+          await storage.saveReminders(cleanedReminders);
+        }
+
+        await checkDailyReset(cleanedReminders);
+
+        // Reschedule pending reminders
+        for (const reminder of cleanedReminders.filter(r => !r.completed)) {
           if (reminder.type === 'daily') {
             await notificationService.rescheduleDaily(reminder);
           } else {

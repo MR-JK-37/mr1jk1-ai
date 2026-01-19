@@ -17,6 +17,8 @@ const Install = () => {
   const [isAndroid, setIsAndroid] = useState(false);
   const navigate = useNavigate();
 
+  const apkReady = isDirectApkUrl(APP_CONFIG.APK_DOWNLOAD_URL);
+
   useEffect(() => {
     // Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
@@ -51,10 +53,10 @@ const Install = () => {
 
   const handleInstallPWA = async () => {
     if (!deferredPrompt) return;
-    
+
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
-    
+
     if (outcome === 'accepted') {
       setIsInstalled(true);
     }
@@ -62,7 +64,9 @@ const Install = () => {
   };
 
   const handleDownloadAPK = () => {
-    window.open(APP_CONFIG.APK_DOWNLOAD_URL, '_blank');
+    if (!apkReady) return;
+    // Use same-tab navigation so Android Chrome reliably triggers the download flow.
+    window.location.assign(APP_CONFIG.APK_DOWNLOAD_URL);
   };
 
   const features = [
@@ -176,21 +180,31 @@ const Install = () => {
               Download the Android app (APK) for the best experience with full notifications and offline support.
             </p>
             
-            <Button
-              onClick={handleDownloadAPK}
-              size="lg"
-              className="w-full btn-glossy bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:opacity-90 animate-pulse-glow-intense font-mono text-base"
-            >
-              <Download className="w-5 h-5 mr-2" />
-              Download Android App (.APK)
-            </Button>
-            
-            <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/50">
-              <p className="text-xs text-muted-foreground font-mono">
-                <span className="text-primary">TIP:</span> After download, tap the APK file to install.
-                You may need to allow installation from unknown sources in your device settings.
-              </p>
-            </div>
+            {apkReady ? (
+              <>
+                <Button
+                  onClick={handleDownloadAPK}
+                  size="lg"
+                  className="w-full btn-glossy bg-gradient-to-r from-primary to-secondary text-primary-foreground hover:opacity-90 animate-pulse-glow-intense font-mono text-base"
+                >
+                  <Download className="w-5 h-5 mr-2" />
+                  Download Android App (.APK)
+                </Button>
+
+                <div className="mt-4 p-3 rounded-lg bg-muted/30 border border-border/50">
+                  <p className="text-xs text-muted-foreground font-mono">
+                    <span className="text-primary">TIP:</span> After download, tap the APK file to install.
+                    You may need to allow installation from unknown sources in your device settings.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="mt-1 rounded-lg border border-border/50 bg-muted/20 p-4">
+                <p className="text-sm font-mono text-muted-foreground">
+                  Android APK is not published yet.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
 
@@ -308,5 +322,21 @@ const Step = ({ num, text, icon }: { num: number; text: string; icon?: string })
     <p className="text-foreground/80 font-mono text-sm pt-0.5">{text}</p>
   </div>
 );
+
+const isDirectApkUrl = (url: string): boolean => {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  if (!lower.startsWith('https://')) return false;
+  if (!lower.endsWith('.apk')) return false;
+
+  // Guard against placeholder config values.
+  if (url.includes('YOUR_USERNAME') || url.includes('<USERNAME>')) return false;
+  if (url.includes('YOUR_REPO') || url.includes('<REPO>')) return false;
+
+  // GitHub Releases direct asset links use /releases/download/…
+  if (url.includes('github.com') && !url.includes('/releases/download/')) return false;
+
+  return true;
+};
 
 export default Install;

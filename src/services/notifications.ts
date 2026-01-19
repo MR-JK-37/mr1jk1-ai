@@ -1,8 +1,16 @@
 // Notification service - uses Capacitor Local Notifications when available
 import { Reminder } from '@/types';
 
+type PermissionStatus = 'granted' | 'denied' | 'prompt' | 'unsupported';
+
+type PendingNotification =
+  | { kind: 'capacitor'; notificationId: number }
+  | { kind: 'web'; timeoutId: number };
+
 interface NotificationService {
+  init(): Promise<void>;
   requestPermission(): Promise<boolean>;
+  getPermissionStatus(): Promise<PermissionStatus>;
   scheduleReminder(reminder: Reminder): Promise<number>;
   cancelReminder(id: string): Promise<void>;
   cancelAll(): Promise<void>;
@@ -11,21 +19,85 @@ interface NotificationService {
 
 class NotificationServiceImpl implements NotificationService {
   private hasPermission = false;
-  private pendingNotifications: Map<string, number> = new Map();
+  private pendingNotifications: Map<string, PendingNotification> = new Map();
   private notificationCounter = 1;
+  private initialized = false;
+
+  async init(): Promise<void> {
+    if (this.initialized) return;
+
+    if (typeof (window as any).Capacitor === 'undefined') {
+      this.initialized = true;
+      return;
+    }
+
+    try {
+      const { LocalNotifications } = await import('@capacitor/local-notifications');
+
+      // Ensure we have a channel on Android 8+
+      try {
+        await LocalNotifications.createChannel({
+          id: 'mrjk_reminders',
+          name: 'MR!JK! Reminders',
+          description: 'Reminder notifications from MR!JK!',
+          importance: 5, // max
+          visibility: 1, // public
+          sound: 'beep.wav',
+          lights: true,
+          vibration: true,
+        });
+      } catch (e) {
+        // Some platforms may not support channels; do not fail init.
+        console.debug('Notification channel create skipped:', e);
+      }
+
+      // Useful logs for device debugging
+      LocalNotifications.addListener('localNotificationReceived', (n) => {
+        console.log('[MR!JK!] localNotificationReceived', n);
+      });
+
+      LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
+        console.log('[MR!JK!] localNotificationActionPerformed', a);
+      });
+    } catch (error) {
+      console.error('Notification init error:', error);
+    } finally {
+      this.initialized = true;
+    }
+  }
+
+  async getPermissionStatus(): Promise<PermissionStatus> {
+    if (typeof (window as any).Capacitor !== 'undefined') {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        const permStatus = await LocalNotifications.checkPermissions();
+        return permStatus.display as PermissionStatus;
+      } catch {
+        return 'unsupported';
+      }
+    }
+
+    if ('Notification' in window) {
+      return Notification.permission as PermissionStatus;
+    }
+
+    return 'unsupported';
+  }
 
   async requestPermission(): Promise<boolean> {
+    await this.init();
+
     // Check if we're in a Capacitor environment
     if (typeof (window as any).Capacitor !== 'undefined') {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         const permStatus = await LocalNotifications.checkPermissions();
-        
+
         if (permStatus.display === 'granted') {
           this.hasPermission = true;
           return true;
         }
-        
+
         const requested = await LocalNotifications.requestPermissions();
         this.hasPermission = requested.display === 'granted';
         return this.hasPermission;
@@ -40,7 +112,7 @@ class NotificationServiceImpl implements NotificationService {
         this.hasPermission = true;
         return true;
       }
-      
+
       const permission = await Notification.requestPermission();
       this.hasPermission = permission === 'granted';
       return this.hasPermission;
@@ -50,7 +122,9 @@ class NotificationServiceImpl implements NotificationService {
   }
 
   async scheduleReminder(reminder: Reminder): Promise<number> {
-    const now = new Date().getTime();
+    await this.init();
+
+    const now = Date.now();
     const triggerTime = new Date(reminder.datetime).getTime();
     const delay = triggerTime - now;
 
@@ -61,76 +135,87 @@ class NotificationServiceImpl implements NotificationService {
       tomorrow.setDate(tomorrow.getDate() + 1);
       actualTriggerTime = tomorrow.getTime();
     } else if (delay <= 0) {
-      console.warn('Reminder time has passed, not scheduling');
+      console.warn('[MR!JK!] Reminder time has passed, not scheduling', reminder);
       return 0;
     }
-
-    const actualDelay = actualTriggerTime - now;
 
     // Cancel any existing notification for this reminder
     await this.cancelReminder(reminder.id);
 
     // Generate unique notification ID
-    const notificationId = reminder.type === 'daily' 
-      ? this.generateDailyNotificationId(reminder.id) 
-      : this.generateNotificationId();
+    const notificationId =
+      reminder.type === 'daily'
+        ? this.generateDailyNotificationId(reminder.id)
+        : this.generateNotificationId();
 
-    // Check if Capacitor is available
+    // Native (Capacitor)
     if (typeof (window as any).Capacitor !== 'undefined') {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
-        
-        // Request permission if needed
-        const permStatus = await LocalNotifications.checkPermissions();
-        if (permStatus.display !== 'granted') {
-          await LocalNotifications.requestPermissions();
+
+        const perm = await LocalNotifications.checkPermissions();
+        if (perm.display !== 'granted') {
+          const requested = await LocalNotifications.requestPermissions();
+          this.hasPermission = requested.display === 'granted';
+        } else {
+          this.hasPermission = true;
         }
 
-        // Schedule the notification
+        if (!this.hasPermission) {
+          console.warn('[MR!JK!] Notifications permission not granted; not scheduling');
+          return 0;
+        }
+
         await LocalNotifications.schedule({
           notifications: [
             {
               id: notificationId,
-              title: reminder.type === 'daily' ? '🔔 Daily Reminder' : '🔔 Reminder',
-              body: `MR!JK! - ${reminder.title}`,
+              title: reminder.type === 'daily' ? 'MR!JK! • Daily Reminder' : 'MR!JK! • Reminder',
+              body: reminder.title,
               schedule: { at: new Date(actualTriggerTime) },
-              sound: 'default',
+              channelId: 'mrjk_reminders',
+              sound: 'beep.wav',
               extra: {
                 reminderId: reminder.id,
                 category: reminder.category,
                 type: reminder.type,
+                scheduledAt: actualTriggerTime,
               },
             },
           ],
         });
 
-        this.pendingNotifications.set(reminder.id, notificationId);
-        console.log(`Scheduled Capacitor notification for: ${reminder.title} at ${new Date(actualTriggerTime)}`);
+        this.pendingNotifications.set(reminder.id, { kind: 'capacitor', notificationId });
+        console.log('[MR!JK!] Scheduled native notification', {
+          reminderId: reminder.id,
+          notificationId,
+          at: new Date(actualTriggerTime).toString(),
+          type: reminder.type,
+        });
         return notificationId;
       } catch (error) {
-        console.error('Capacitor notification error:', error);
+        console.error('Capacitor notification schedule error:', error);
         // Fall back to web notifications
-        return this.scheduleWebNotification(reminder, actualDelay, notificationId);
+        return this.scheduleWebNotification(reminder, actualTriggerTime - now);
       }
-    } else {
-      // Use web notifications as fallback
-      return this.scheduleWebNotification(reminder, actualDelay, notificationId);
     }
+
+    // Web fallback
+    return this.scheduleWebNotification(reminder, actualTriggerTime - now);
   }
 
-  private scheduleWebNotification(reminder: Reminder, delay: number, notificationId: number): number {
-    // Use setTimeout for web fallback
+  private scheduleWebNotification(reminder: Reminder, delay: number): number {
     const timeoutId = window.setTimeout(async () => {
       if (this.hasPermission && 'Notification' in window) {
-        new Notification(`🔔 ${reminder.type === 'daily' ? 'Daily Reminder' : 'Reminder'}`, {
-          body: `MR!JK! - ${reminder.title}`,
+        new Notification(`MR!JK! • ${reminder.type === 'daily' ? 'Daily Reminder' : 'Reminder'}`, {
+          body: reminder.title,
           icon: '/icons/icon-192x192.png',
           tag: reminder.id,
           requireInteraction: true,
         });
       }
       this.pendingNotifications.delete(reminder.id);
-      
+
       // For daily reminders, reschedule for tomorrow
       if (reminder.type === 'daily') {
         const tomorrow = new Date(reminder.datetime);
@@ -140,9 +225,13 @@ class NotificationServiceImpl implements NotificationService {
       }
     }, delay);
 
-    this.pendingNotifications.set(reminder.id, timeoutId);
-    console.log(`Scheduled web notification for: ${reminder.title} in ${Math.round(delay / 1000)}s`);
-    return notificationId;
+    this.pendingNotifications.set(reminder.id, { kind: 'web', timeoutId });
+    console.log('[MR!JK!] Scheduled web notification', {
+      reminderId: reminder.id,
+      inSeconds: Math.round(delay / 1000),
+      type: reminder.type,
+    });
+    return timeoutId;
   }
 
   async rescheduleDaily(reminder: Reminder): Promise<void> {
@@ -163,29 +252,30 @@ class NotificationServiceImpl implements NotificationService {
   }
 
   async cancelReminder(id: string): Promise<void> {
-    const notificationId = this.pendingNotifications.get(id);
-    
-    // Cancel Capacitor notification if available
-    if (typeof (window as any).Capacitor !== 'undefined' && notificationId) {
+    const pending = this.pendingNotifications.get(id);
+
+    // Cancel native notification
+    if (typeof (window as any).Capacitor !== 'undefined' && pending?.kind === 'capacitor') {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
         await LocalNotifications.cancel({
-          notifications: [{ id: notificationId }],
+          notifications: [{ id: pending.notificationId }],
         });
       } catch (error) {
-        console.error('Error canceling Capacitor notification:', error);
+        console.error('Error canceling native notification:', error);
       }
     }
 
-    // Cancel web notification timeout
-    if (notificationId) {
-      window.clearTimeout(notificationId);
-      this.pendingNotifications.delete(id);
+    // Cancel web timeout
+    if (pending?.kind === 'web') {
+      window.clearTimeout(pending.timeoutId);
     }
+
+    this.pendingNotifications.delete(id);
   }
 
   async cancelAll(): Promise<void> {
-    // Cancel all Capacitor notifications
+    // Cancel all native notifications
     if (typeof (window as any).Capacitor !== 'undefined') {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications');
@@ -194,13 +284,13 @@ class NotificationServiceImpl implements NotificationService {
           await LocalNotifications.cancel(pending);
         }
       } catch (error) {
-        console.error('Error canceling all Capacitor notifications:', error);
+        console.error('Error canceling all native notifications:', error);
       }
     }
 
-    // Cancel all web notification timeouts
-    this.pendingNotifications.forEach((timeoutId) => {
-      window.clearTimeout(timeoutId);
+    // Cancel all web timeouts
+    this.pendingNotifications.forEach((pending) => {
+      if (pending.kind === 'web') window.clearTimeout(pending.timeoutId);
     });
     this.pendingNotifications.clear();
   }
