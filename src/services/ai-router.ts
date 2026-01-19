@@ -116,7 +116,8 @@ class AIRouter {
   async streamResponse(
     message: string,
     history: Message[],
-    onChunk: (chunk: string) => void
+    onChunk: (chunk: string) => void,
+    responseLength?: 'concise' | 'balanced' | 'detailed'
   ): Promise<void> {
     try {
       const apiMessages = history.slice(-10).map(m => ({
@@ -136,6 +137,7 @@ class AIRouter {
         body: JSON.stringify({
           messages: apiMessages,
           mode: this.currentMode,
+          responseLength,
         }),
       });
 
@@ -181,7 +183,8 @@ class AIRouter {
       }
     } catch (error) {
       console.error('Stream error:', error);
-      onChunk(this.getFallbackResponse());
+      // Do not fake responses here; caller should surface the error.
+      throw error;
     }
   }
 
