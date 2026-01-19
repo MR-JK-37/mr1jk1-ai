@@ -29,13 +29,25 @@ export function SettingsPage({
   const [notificationStatus, setNotificationStatus] = useState<'granted' | 'denied' | 'default'>('default');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [testCountdown, setTestCountdown] = useState<number | null>(null);
 
   useEffect(() => {
     // Check notification permission
-    if ('Notification' in window) {
-      setNotificationStatus(Notification.permission as 'granted' | 'denied' | 'default');
-    }
+    const checkPerm = async () => {
+      const status = await notificationService.getPermissionStatus();
+      if (status === 'granted' || status === 'denied' || status === 'prompt') {
+        setNotificationStatus(status === 'prompt' ? 'default' : status);
+      }
+    };
+    checkPerm();
   }, []);
+
+  // Countdown timer for test reminder
+  useEffect(() => {
+    if (testCountdown === null || testCountdown <= 0) return;
+    const id = window.setInterval(() => setTestCountdown(prev => (prev !== null && prev > 0 ? prev - 1 : null)), 1000);
+    return () => clearInterval(id);
+  }, [testCountdown]);
 
   const handleVoiceToggle = () => {
     setLocalSettings(prev => ({
@@ -101,11 +113,38 @@ export function SettingsPage({
     }
 
     if ('Notification' in window) {
-      new Notification('🔔 Test Notification', {
-        body: 'MR!JK! notifications are working!',
+      new Notification('MR!JK! • Test', {
+        body: 'Notifications are working!',
         icon: '/icons/icon-192x192.png',
       });
       toast.success('Test notification sent!');
+    }
+  };
+
+  const handleScheduleTestReminder = async () => {
+    if (notificationStatus !== 'granted') {
+      toast.error('Please enable notifications first');
+      return;
+    }
+
+    const futureDate = new Date(Date.now() + 60 * 1000); // 60 seconds
+    const testReminder = {
+      id: `test_${Date.now()}`,
+      title: 'Test Reminder (60s)',
+      datetime: futureDate,
+      completed: false,
+      category: 'personal' as const,
+      type: 'event' as const,
+    };
+
+    try {
+      const notifId = await notificationService.scheduleReminder(testReminder);
+      console.log('[MR!JK!] Scheduled test reminder', { notifId, at: futureDate.toString() });
+      toast.success('Test reminder scheduled in 60 seconds');
+      setTestCountdown(60);
+    } catch (err) {
+      console.error('[MR!JK!] Failed to schedule test reminder', err);
+      toast.error('Failed to schedule test reminder');
     }
   };
 
@@ -325,13 +364,23 @@ export function SettingsPage({
               )}
 
               {notificationStatus === 'granted' && (
-                <button
-                  onClick={handleTestNotification}
-                  className="w-full py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
-                >
-                  <TestTube className="w-4 h-4" />
-                  Test Notification
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleTestNotification}
+                    className="flex-1 py-2 bg-muted hover:bg-muted/80 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+                  >
+                    <TestTube className="w-4 h-4" />
+                    Instant Test
+                  </button>
+                  <button
+                    onClick={handleScheduleTestReminder}
+                    disabled={testCountdown !== null && testCountdown > 0}
+                    className="flex-1 py-2 bg-primary/20 hover:bg-primary/30 text-primary rounded-lg text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    <Play className="w-4 h-4" />
+                    {testCountdown !== null && testCountdown > 0 ? `${testCountdown}s` : '60s Reminder'}
+                  </button>
+                </div>
               )}
 
               {notificationStatus === 'denied' && (
