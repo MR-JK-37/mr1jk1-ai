@@ -226,74 +226,83 @@ export function useAppState() {
   }, []);
 
   // Message management
-  const addMessage = useCallback(async (message: Omit<Message, 'id' | 'timestamp'>) => {
-    const newMessage: Message = {
-      ...message,
-      id: crypto.randomUUID(),
-      timestamp: new Date(),
-    };
-
-    let sessionId = currentSessionId;
-    let updatedSessions = [...chatSessions];
-
-    // Create new session if none exists
-    if (!sessionId) {
-      const newSession: ChatSession = {
+  const addMessage = useCallback(
+    async (message: Omit<Message, 'id' | 'timestamp'>, targetSessionId?: string) => {
+      const newMessage: Message = {
+        ...message,
         id: crypto.randomUUID(),
-        title: message.content.slice(0, 50) || 'New Chat',
-        messages: [newMessage],
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        mode: message.mode,
+        timestamp: new Date(),
       };
-      updatedSessions = [newSession, ...updatedSessions];
-      sessionId = newSession.id;
-      setCurrentSessionId(sessionId);
-      await storage.saveCurrentSessionId(sessionId);
-    } else {
-      // Update existing session
-      updatedSessions = updatedSessions.map(session => {
-        if (session.id === sessionId) {
-          const updatedMessages = [...session.messages, newMessage];
-          // Update title from first user message
-          const title = session.messages.length === 0 && message.role === 'user' 
-            ? message.content.slice(0, 50) 
-            : session.title;
-          return {
-            ...session,
-            messages: updatedMessages,
-            title,
-            updatedAt: new Date(),
+
+      let sessionId = targetSessionId ?? currentSessionId;
+      let updatedSessions = [...chatSessions];
+
+      // Create new session if none exists
+      if (!sessionId) {
+        const newSession: ChatSession = {
+          id: crypto.randomUUID(),
+          title: message.content.slice(0, 50) || 'New Chat',
+          messages: [newMessage],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          mode: message.mode,
+        };
+        updatedSessions = [newSession, ...updatedSessions];
+        sessionId = newSession.id;
+
+        setCurrentSessionId(sessionId);
+        await storage.saveCurrentSessionId(sessionId);
+      } else {
+        // Update existing session
+        updatedSessions = updatedSessions.map((session) => {
+          if (session.id === sessionId) {
+            const updatedMessages = [...session.messages, newMessage];
+            // Update title from first user message
+            const title =
+              session.messages.length === 0 && message.role === 'user'
+                ? message.content.slice(0, 50)
+                : session.title;
+            return {
+              ...session,
+              messages: updatedMessages,
+              title,
+              updatedAt: new Date(),
+            };
+          }
+          return session;
+        });
+      }
+
+      setChatSessions(updatedSessions);
+      await storage.saveChatSessions(updatedSessions);
+
+      return newMessage;
+    },
+    [chatSessions, currentSessionId]
+  );
+
+  const updateLastMessage = useCallback(
+    async (content: string, targetSessionId?: string) => {
+      const sessionId = targetSessionId ?? currentSessionId;
+      if (!sessionId) return;
+
+      const updatedSessions = chatSessions.map((session) => {
+        if (session.id === sessionId && session.messages.length > 0) {
+          const messages = [...session.messages];
+          messages[messages.length - 1] = {
+            ...messages[messages.length - 1],
+            content,
           };
+          return { ...session, messages, updatedAt: new Date() };
         }
         return session;
       });
-    }
 
-    setChatSessions(updatedSessions);
-    await storage.saveChatSessions(updatedSessions);
-    
-    return newMessage;
-  }, [chatSessions, currentSessionId]);
-
-  const updateLastMessage = useCallback(async (content: string) => {
-    if (!currentSessionId) return;
-
-    const updatedSessions = chatSessions.map(session => {
-      if (session.id === currentSessionId && session.messages.length > 0) {
-        const messages = [...session.messages];
-        messages[messages.length - 1] = {
-          ...messages[messages.length - 1],
-          content,
-        };
-        return { ...session, messages, updatedAt: new Date() };
-      }
-      return session;
-    });
-
-    setChatSessions(updatedSessions);
-    await storage.saveChatSessions(updatedSessions);
-  }, [chatSessions, currentSessionId]);
+      setChatSessions(updatedSessions);
+      await storage.saveChatSessions(updatedSessions);
+    },
+    [chatSessions, currentSessionId]
+  );
 
   // Reminder management
   const addReminder = useCallback(async (reminder: Omit<Reminder, 'id'>) => {

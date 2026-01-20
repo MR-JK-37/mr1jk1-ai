@@ -73,38 +73,54 @@ const Index = () => {
   }, []);
 
   const handleSendMessage = async (content: string, attachments?: Attachment[]) => {
+    // CRITICAL: ensure we have a sessionId for this send.
+    // Otherwise, the user message + assistant placeholder can end up in different sessions,
+    // and the assistant response will never render.
+    let sessionId = currentSessionId;
+    if (!sessionId) {
+      const s = await createNewSession();
+      sessionId = s.id;
+    }
+
     // Add user message
-    await addMessage({
-      role: 'user',
-      content,
-      mode,
-      attachments,
-    });
+    await addMessage(
+      {
+        role: 'user',
+        content,
+        mode,
+        attachments,
+      },
+      sessionId
+    );
 
     // Create placeholder for assistant message
-    await addMessage({
-      role: 'assistant',
-      content: '',
-      mode,
-    });
+    await addMessage(
+      {
+        role: 'assistant',
+        content: '',
+        mode,
+      },
+      sessionId
+    );
 
     // Stream AI response
     let assistantContent = '';
-    
+
     try {
       await aiRouter.streamResponse(
         content,
         messages,
         (chunk) => {
           assistantContent += chunk;
-          updateLastMessage(assistantContent);
+          updateLastMessage(assistantContent, sessionId);
         },
         appSettings.responseLength
       );
     } catch (error) {
-      console.error('Failed to get AI response:', error);
-      toast.error('Failed to get AI response');
-      updateLastMessage('Sorry, I encountered an error. Please try again.');
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[MR!JK!] AI request failed:', error);
+      toast.error('AI request failed');
+      updateLastMessage(`\n\n\`\`\`\n[ERROR] AI request failed: ${errMsg}\n\`\`\`\n`, sessionId);
     }
   };
 
