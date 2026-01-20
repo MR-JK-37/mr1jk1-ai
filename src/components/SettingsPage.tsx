@@ -112,12 +112,24 @@ export function SettingsPage({
       return;
     }
 
-    if ('Notification' in window) {
-      new Notification('MR!JK! • Test', {
-        body: 'Notifications are working!',
-        icon: '/icons/icon-192x192.png',
-      });
-      toast.success('Test notification sent!');
+    // Native-safe: schedule a notification ~1s in the future.
+    const fireAt = new Date(Date.now() + 1000);
+    const testReminder = {
+      id: `test_instant_${Date.now()}`,
+      title: 'Test Notification',
+      datetime: fireAt,
+      completed: false,
+      category: 'personal' as const,
+      type: 'event' as const,
+    };
+
+    try {
+      const notifId = await notificationService.scheduleReminder(testReminder);
+      console.log('[MR!JK!] Instant test scheduled', { notifId, at: fireAt.toString() });
+      toast.success('Test notification scheduled');
+    } catch (err) {
+      console.error('[MR!JK!] Failed to schedule instant test', err);
+      toast.error('Failed to schedule test notification');
     }
   };
 
